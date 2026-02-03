@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
-from app.routers import auth, transactions, budgets, insights, anomalies, upload, settings
+from app.routers import auth, transactions, budgets, insights, anomalies, imports, settings, accounts, upload
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -23,8 +23,10 @@ app.include_router(transactions.router, prefix="/api/transactions", tags=["trans
 app.include_router(budgets.router, prefix="/api/budgets", tags=["budgets"])
 app.include_router(insights.router, prefix="/api/insights", tags=["insights"])
 app.include_router(anomalies.router, prefix="/api/anomalies", tags=["anomalies"])
-app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
+app.include_router(imports.router, prefix="/api/imports", tags=["imports"])
 app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
+app.include_router(accounts.router, prefix="/api/accounts", tags=["accounts"])
+app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
 
 @app.get("/")
 def root():

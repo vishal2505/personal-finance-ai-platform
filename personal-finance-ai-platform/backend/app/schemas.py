@@ -32,6 +32,8 @@ class TransactionCreate(BaseModel):
     merchant: str
     description: Optional[str] = None
     transaction_type: TransactionType = TransactionType.DEBIT
+    category_id: Optional[int] = None
+    account_id: Optional[int] = None
     bank_name: Optional[str] = None
     card_last_four: Optional[str] = None
     statement_period: Optional[str] = None
@@ -54,6 +56,10 @@ class TransactionResponse(BaseModel):
     card_last_four: Optional[str]
     category_id: Optional[int]
     category_name: Optional[str] = None
+    account_id: Optional[int] = None
+    account_name: Optional[str] = None
+    import_job_id: Optional[int] = None
+    source: str
     is_anomaly: bool
     anomaly_score: float
     
@@ -132,3 +138,38 @@ class AnomalyResponse(BaseModel):
     transaction: TransactionResponse
     reason: str
     severity: str
+
+# Account schemas
+class AccountCreate(BaseModel):
+    name: str
+    bank_name: str
+    card_last_four: Optional[str] = None
+    account_type: str = "credit_card"
+
+class AccountResponse(BaseModel):
+    id: int
+    name: str
+    bank_name: str
+    card_last_four: Optional[str]
+    account_type: str
+    is_active: bool
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# Import Job schemas
+class ImportJobResponse(BaseModel):
+    id: int
+    filename: str
+    file_type: str
+    status: str
+    statement_period: Optional[str]
+    total_transactions: int
+    processed_transactions: int
+    error_message: Optional[str]
+    created_at: datetime
+    completed_at: Optional[datetime]
+    
+    class Config:
+        from_attributes = True
