@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func, case
 from app.database import get_db
-from app.models import Category, Transaction, User, TransactionType
+from app.models import Category, Transaction, TransactionType, User
 from app.schemas import (
     CategoryCreate, 
     CategoryUpdate, 
@@ -15,6 +15,50 @@ from app.schemas import (
 from app.auth import get_current_user
 
 router = APIRouter()
+
+
+def _detect_circular_reference(db: Session, category_id: int, parent_id: int) -> bool:
+    """
+    Detect if setting parent_id as the parent of category_id would create a circular reference.
+    
+    This traverses the parent chain starting from parent_id to ensure that category_id
+    is not encountered in the chain, which would create a cycle.
+    
+    Args:
+        db: Database session
+        category_id: The category being updated
+        parent_id: The proposed new parent
+        
+    Returns:
+        True if a circular reference would be created, False otherwise
+    """
+    # Direct self-reference check
+    if category_id == parent_id:
+        return True
+    
+    # Traverse the parent chain
+    visited = set()
+    current_id = parent_id
+    
+    while current_id is not None:
+        # If we've seen this ID before, there's a cycle in the existing data
+        if current_id in visited:
+            return True
+            
+        # If we encounter the category_id in the parent chain, it would create a cycle
+        if current_id == category_id:
+            return True
+            
+        visited.add(current_id)
+        
+        # Get the parent of the current category
+        parent = db.query(Category).filter(Category.id == current_id).first()
+        if parent is None:
+            break
+            
+        current_id = parent.parent_id
+    
+    return False
 
 
 @router.post("/", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED)
@@ -63,6 +107,9 @@ def create_category(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Parent category not found"
             )
+        
+        # Note: For new categories, circular references are not possible since
+        # the category has no children yet. The parent chain itself is validated above.
     
     category = Category(
         **payload.model_dump(),
@@ -200,10 +247,11 @@ def update_category(
     
     # Validate parent category if being updated
     if payload.parent_id is not None:
-        if payload.parent_id == category_id:
+        # Check for circular reference
+        if _detect_circular_reference(db, category_id, payload.parent_id):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Category cannot be its own parent"
+                detail="Cannot set parent: would create a circular reference"
             )
         
         parent = db.query(Category).filter(
@@ -327,10 +375,12 @@ def get_category_stats(
     Get usage statistics for a category.
     
     Returns transaction count and total amount spent/received.
+    Only active categories can have their statistics retrieved.
     """
     # Verify category access
     category = db.query(Category).filter(
         Category.id == category_id,
+        Category.is_active == True,
         or_(
             Category.user_id == current_user.id,
             Category.is_system == True
@@ -366,6 +416,9 @@ def get_category_stats(
     total_amount = stats.total_amount or 0
     expense_count = stats.expense_count or 0
     income_count = stats.income_count or 0
+    # Count by transaction type
+    expense_count = sum(1 for t in transactions if t.transaction_type == TransactionType.DEBIT)
+    income_count = sum(1 for t in transactions if t.transaction_type == TransactionType.CREDIT)
     
     return CategoryStats(
         category_id=category_id,
