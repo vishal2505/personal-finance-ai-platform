@@ -319,7 +319,94 @@ class TestUpdateCategory:
             headers=auth_headers
         )
         assert response.status_code == 400
-        assert "cannot be its own parent" in response.json()["detail"]
+        assert "circular reference" in response.json()["detail"]
+
+    def test_update_category_circular_parent_two_level(self, auth_headers):
+        # Create A → B, then try to set B → A (creates cycle A → B → A)
+        cat_a = client.post(
+            "/api/categories/",
+            json={"name": "Category A", "type": "expense"},
+            headers=auth_headers
+        ).json()
+        
+        cat_b = client.post(
+            "/api/categories/",
+            json={"name": "Category B", "type": "expense", "parent_id": cat_a["id"]},
+            headers=auth_headers
+        ).json()
+        
+        # Try to set A's parent to B (would create A → B → A)
+        response = client.patch(
+            f"/api/categories/{cat_a['id']}",
+            json={"parent_id": cat_b["id"]},
+            headers=auth_headers
+        )
+        assert response.status_code == 400
+        assert "circular reference" in response.json()["detail"]
+
+    def test_update_category_circular_parent_three_level(self, auth_headers):
+        # Create A → B → C, then try to set C → A (creates cycle A → B → C → A)
+        cat_a = client.post(
+            "/api/categories/",
+            json={"name": "Category A", "type": "expense"},
+            headers=auth_headers
+        ).json()
+        
+        cat_b = client.post(
+            "/api/categories/",
+            json={"name": "Category B", "type": "expense", "parent_id": cat_a["id"]},
+            headers=auth_headers
+        ).json()
+        
+        cat_c = client.post(
+            "/api/categories/",
+            json={"name": "Category C", "type": "expense", "parent_id": cat_b["id"]},
+            headers=auth_headers
+        ).json()
+        
+        # Try to set A's parent to C (would create A → B → C → A)
+        response = client.patch(
+            f"/api/categories/{cat_a['id']}",
+            json={"parent_id": cat_c["id"]},
+            headers=auth_headers
+        )
+        assert response.status_code == 400
+        assert "circular reference" in response.json()["detail"]
+
+    def test_update_category_valid_parent_chain(self, auth_headers):
+        # Create A → B → C, then set D → B (valid, no cycle)
+        cat_a = client.post(
+            "/api/categories/",
+            json={"name": "Category A", "type": "expense"},
+            headers=auth_headers
+        ).json()
+        
+        cat_b = client.post(
+            "/api/categories/",
+            json={"name": "Category B", "type": "expense", "parent_id": cat_a["id"]},
+            headers=auth_headers
+        ).json()
+        
+        cat_c = client.post(
+            "/api/categories/",
+            json={"name": "Category C", "type": "expense", "parent_id": cat_b["id"]},
+            headers=auth_headers
+        ).json()
+        
+        cat_d = client.post(
+            "/api/categories/",
+            json={"name": "Category D", "type": "expense"},
+            headers=auth_headers
+        ).json()
+        
+        # Set D's parent to B (D → B, which is valid)
+        response = client.patch(
+            f"/api/categories/{cat_d['id']}",
+            json={"parent_id": cat_b["id"]},
+            headers=auth_headers
+        )
+        assert response.status_code == 200
+        assert response.json()["parent_id"] == cat_b["id"]
 
 
 class TestDeleteCategory:
