@@ -108,8 +108,8 @@ def create_category(
                 detail="Parent category not found"
             )
         
-        # Note: For new categories, we only need to check if parent_id is valid
-        # Circular reference is not possible since the category doesn't exist yet
+        # Note: For new categories, circular references are not possible since
+        # the category has no children yet. The parent chain itself is validated above.
     
     category = Category(
         **payload.model_dump(),
