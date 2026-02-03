@@ -375,10 +375,12 @@ def get_category_stats(
     Get usage statistics for a category.
     
     Returns transaction count and total amount spent/received.
+    Only active categories can have their statistics retrieved.
     """
     # Verify category access
     category = db.query(Category).filter(
         Category.id == category_id,
+        Category.is_active == True,
         or_(
             Category.user_id == current_user.id,
             Category.is_system == True
