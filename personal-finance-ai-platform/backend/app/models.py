@@ -72,7 +72,8 @@ class Category(Base):
     # Relationships
     user = relationship("User", back_populates="categories")
     transactions = relationship("Transaction", back_populates="category")
-    parent = relationship("Category", remote_side=[id])
+    parent = relationship("Category", remote_side=[id], back_populates="children")
+    children = relationship("Category", back_populates="parent")
 
 class MerchantRule(Base):
     __tablename__ = "merchant_rules"
