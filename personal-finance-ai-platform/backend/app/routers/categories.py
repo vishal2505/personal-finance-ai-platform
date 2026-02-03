@@ -2,9 +2,9 @@ from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, func, case
 from app.database import get_db
-from app.models import Category, Transaction, User
+from app.models import Category, Transaction, User, TransactionType
 from app.schemas import (
     CategoryCreate, 
     CategoryUpdate, 
@@ -343,28 +343,29 @@ def get_category_stats(
             detail="Category not found"
         )
 
-    # Build query for transactions
-    query = db.query(Transaction).filter(
-        and_(
-            Transaction.category_id == category_id,
-            Transaction.user_id == current_user.id
-        )
-    )
+    # Build base filters
+    filters = [
+        Transaction.category_id == category_id,
+        Transaction.user_id == current_user.id
+    ]
     
     if start_date:
-        query = query.filter(Transaction.date >= start_date)
+        filters.append(Transaction.date >= start_date)
     if end_date:
-        query = query.filter(Transaction.date <= end_date)
+        filters.append(Transaction.date <= end_date)
     
-    # Get statistics
-    transactions = query.all()
-    transaction_count = len(transactions)
-    total_amount = sum(t.amount for t in transactions)
+    # Get statistics using SQL aggregation
+    stats = db.query(
+        func.count(Transaction.id).label('transaction_count'),
+        func.coalesce(func.sum(Transaction.amount), 0).label('total_amount'),
+        func.sum(case((Transaction.transaction_type == TransactionType.DEBIT, 1), else_=0)).label('expense_count'),
+        func.sum(case((Transaction.transaction_type == TransactionType.CREDIT, 1), else_=0)).label('income_count')
+    ).filter(and_(*filters)).first()
     
-    # Count by transaction type
-    from app.models import TransactionType
-    expense_count = sum(1 for t in transactions if t.transaction_type == TransactionType.DEBIT)
-    income_count = sum(1 for t in transactions if t.transaction_type == TransactionType.CREDIT)
+    transaction_count = stats.transaction_count or 0
+    total_amount = stats.total_amount or 0
+    expense_count = stats.expense_count or 0
+    income_count = stats.income_count or 0
     
     return CategoryStats(
         category_id=category_id,
