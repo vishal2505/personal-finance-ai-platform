@@ -2,7 +2,7 @@ from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, func
+from sqlalchemy import and_, or_, func
 from app.database import get_db
 from app.models import Transaction, Category, User
 from app.schemas import TransactionResponse, TransactionUpdate, TransactionBulkUpdate
