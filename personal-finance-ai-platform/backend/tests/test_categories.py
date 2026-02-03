@@ -345,7 +345,8 @@ class TestUpdateCategory:
         assert "circular reference" in response.json()["detail"]
 
     def test_update_category_circular_parent_three_level(self, auth_headers):
-        # Create A → B → C, then try to set A → C (creates cycle A → C → B → A)
+        # Create A → B → C, then try to set A's parent to C
+        # This would create a cycle: A → C → B → A
         cat_a = client.post(
             "/api/categories/",
             json={"name": "Category A", "type": "expense"},
