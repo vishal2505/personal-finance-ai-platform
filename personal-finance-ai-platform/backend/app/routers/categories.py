@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 from app.database import get_db
-from app.models import Category, Transaction, User
+from app.models import Category, Transaction, TransactionType, User
 from app.schemas import (
     CategoryCreate, 
     CategoryUpdate, 
@@ -362,7 +362,6 @@ def get_category_stats(
     total_amount = sum(t.amount for t in transactions)
     
     # Count by transaction type
-    from app.models import TransactionType
     expense_count = sum(1 for t in transactions if t.transaction_type == TransactionType.DEBIT)
     income_count = sum(1 for t in transactions if t.transaction_type == TransactionType.CREDIT)
     
