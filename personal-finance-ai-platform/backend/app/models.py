@@ -35,16 +35,44 @@ class User(Base):
 
 class Category(Base):
     __tablename__ = "categories"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    color = Column(String, default="#3B82F6")
-    icon = Column(String, default="💰")
+
+    # Core identity
+    name = Column(String(100), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # Classification
+    type = Column(
+        SQLEnum("expense", "income", "transfer", name="category_type"),
+        nullable=False,
+        default="expense"
+    )
+
+    parent_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
+
+    # UI / UX
+    color = Column(String(7), default="#3B82F6")
+    icon = Column(String(10), default="💰")
+    sort_order = Column(Integer, default=0)
+
+    # Lifecycle & safety
+    is_system = Column(Boolean, default=False)   # Built-in category
+    is_active = Column(Boolean, default=True)    # Soft delete
+    is_hidden = Column(Boolean, default=False)   # Hide from picker
+
+    # Audit
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    # Relationships
     user = relationship("User", back_populates="categories")
     transactions = relationship("Transaction", back_populates="category")
+    parent = relationship("Category", remote_side=[id])
 
 class MerchantRule(Base):
     __tablename__ = "merchant_rules"

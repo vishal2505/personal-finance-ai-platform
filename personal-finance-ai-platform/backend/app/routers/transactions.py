@@ -104,9 +104,16 @@ def update_transaction(
         raise HTTPException(status_code=404, detail="Transaction not found")
     
     if transaction_update.category_id is not None:
-        # Verify category belongs to user
+        # Verify category belongs to user or is a system category
         category = db.query(Category).filter(
-            and_(Category.id == transaction_update.category_id, Category.user_id == current_user.id)
+            and_(
+                Category.id == transaction_update.category_id,
+                Category.is_active == True,
+                or_(
+                    Category.user_id == current_user.id,
+                    Category.is_system == True
+                )
+            )
         ).first()
         if not category:
             raise HTTPException(status_code=404, detail="Category not found")
@@ -157,7 +164,14 @@ def bulk_update_transactions(
     for transaction in transactions:
         if bulk_update.category_id is not None:
             category = db.query(Category).filter(
-                and_(Category.id == bulk_update.category_id, Category.user_id == current_user.id)
+                and_(
+                    Category.id == bulk_update.category_id,
+                    Category.is_active == True,
+                    or_(
+                        Category.user_id == current_user.id,
+                        Category.is_system == True
+                    )
+                )
             ).first()
             if category:
                 transaction.category_id = bulk_update.category_id
