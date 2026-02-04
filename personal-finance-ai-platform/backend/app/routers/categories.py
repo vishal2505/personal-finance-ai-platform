@@ -416,9 +416,6 @@ def get_category_stats(
     total_amount = stats.total_amount or 0
     expense_count = stats.expense_count or 0
     income_count = stats.income_count or 0
-    # Count by transaction type
-    expense_count = sum(1 for t in transactions if t.transaction_type == TransactionType.DEBIT)
-    income_count = sum(1 for t in transactions if t.transaction_type == TransactionType.CREDIT)
     
     return CategoryStats(
         category_id=category_id,
