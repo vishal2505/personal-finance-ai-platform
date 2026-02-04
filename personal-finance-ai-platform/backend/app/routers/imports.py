@@ -1,9 +1,10 @@
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 from app.database import get_db
-from app.models import Transaction, User, Category, MerchantRule, TransactionSource, TransactionStatus
-from app.schemas import TransactionResponse
+from app.models import Transaction, User, Category, MerchantRule, Account, ImportJob, ImportJobStatus, TransactionSource, TransactionStatus
+from app.schemas import TransactionResponse, ImportJobResponse
 from app.auth import get_current_user
 import pdfplumber
 import pandas as pd
@@ -158,46 +159,121 @@ def auto_categorize_transaction(merchant: str, db: Session, user_id: int) -> int
     
     return None
 
-@router.post("/csv", response_model=List[TransactionResponse])
-async def upload_csv(
+@router.post("/upload", response_model=ImportJobResponse)
+async def upload_statement(
     file: UploadFile = File(...),
-    bank_name: str = None,
-    card_last_four: str = None,
-    statement_period: str = None,
+    account_id: Optional[int] = None,
+    statement_period: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    if not file.filename.endswith('.csv'):
-        raise HTTPException(status_code=400, detail="File must be a CSV")
+    """Upload a bank statement (CSV/PDF) and create an import job"""
     
-    content = await file.read()
-    transactions_data = parse_csv(content)
+    is_csv = file.filename.endswith('.csv')
+    is_pdf = file.filename.endswith('.pdf')
     
-    created_transactions = []
-    for t_data in transactions_data:
-        category_id = auto_categorize_transaction(t_data['merchant'], db, current_user.id)
-        
-        transaction = Transaction(
-            user_id=current_user.id,
-            date=t_data['date'],
-            amount=t_data['amount'],
-            merchant=t_data['merchant'],
-            description=t_data.get('description'),
-            bank_name=bank_name,
-            card_last_four=card_last_four,
-            statement_period=statement_period,
-            category_id=category_id,
-            source=TransactionSource.IMPORTED_CSV,
-            status=TransactionStatus.PROCESSED
-        )
-        db.add(transaction)
-        created_transactions.append(transaction)
+    if not is_csv and not is_pdf:
+        raise HTTPException(status_code=400, detail="File must be a CSV or PDF")
     
+    # Create ImportJob
+    import_job = ImportJob(
+        user_id=current_user.id,
+        account_id=account_id,
+        filename=file.filename,
+        file_type='csv' if is_csv else 'pdf',
+        status=ImportJobStatus.PROCESSING,
+        statement_period=statement_period
+    )
+    db.add(import_job)
     db.commit()
+    db.refresh(import_job)
     
+    try:
+        content = await file.read()
+        if is_csv:
+            transactions_data = parse_csv(content)
+            source = TransactionSource.IMPORTED_CSV
+        else:
+            transactions_data = parse_pdf(content)
+            source = TransactionSource.IMPORTED_PDF
+            
+        import_job.total_transactions = len(transactions_data)
+        
+        # Create transactions in PENDING status
+        for t_data in transactions_data:
+            category_id = auto_categorize_transaction(t_data['merchant'], db, current_user.id)
+            
+            transaction = Transaction(
+                user_id=current_user.id,
+                account_id=account_id,
+                import_job_id=import_job.id,
+                date=t_data['date'],
+                amount=t_data['amount'],
+                merchant=t_data['merchant'],
+                description=t_data.get('description'),
+                category_id=category_id,
+                source=source,
+                status=TransactionStatus.PENDING
+            )
+            db.add(transaction)
+            import_job.processed_transactions += 1
+            
+        import_job.status = ImportJobStatus.COMPLETED
+        import_job.completed_at = datetime.now()
+        db.commit()
+        
+    except Exception as e:
+        import_job.status = ImportJobStatus.FAILED
+        import_job.error_message = str(e)
+        db.commit()
+        raise HTTPException(status_code=400, detail=f"Import failed: {str(e)}")
+        
+    db.refresh(import_job)
+    return import_job
+
+@router.get("/", response_model=List[ImportJobResponse])
+def get_import_jobs(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """List all import jobs for the current user"""
+    return db.query(ImportJob).filter(ImportJob.user_id == current_user.id).order_by(ImportJob.created_at.desc()).all()
+
+@router.get("/{job_id}", response_model=ImportJobResponse)
+def get_import_job(
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get details for a specific import job"""
+    job = db.query(ImportJob).filter(
+        and_(ImportJob.id == job_id, ImportJob.user_id == current_user.id)
+    ).first()
+    
+    if not job:
+        raise HTTPException(status_code=404, detail="Import job not found")
+        
+    return job
+
+@router.get("/{job_id}/transactions", response_model=List[TransactionResponse])
+def get_import_job_transactions(
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get transactions associated with an import job"""
+    job = db.query(ImportJob).filter(
+        and_(ImportJob.id == job_id, ImportJob.user_id == current_user.id)
+    ).first()
+    
+    if not job:
+        raise HTTPException(status_code=404, detail="Import job not found")
+        
+    transactions = db.query(Transaction).filter(Transaction.import_job_id == job_id).all()
+    
+    # Map to schema correctly (handling relationships)
     result = []
-    for t in created_transactions:
-        db.refresh(t)
+    for t in transactions:
         result.append(TransactionResponse(
             id=t.id,
             date=t.date,
@@ -217,70 +293,49 @@ async def upload_csv(
             is_anomaly=t.is_anomaly,
             anomaly_score=t.anomaly_score
         ))
-    
     return result
 
-@router.post("/pdf", response_model=List[TransactionResponse])
-async def upload_pdf(
-    file: UploadFile = File(...),
-    bank_name: str = None,
-    card_last_four: str = None,
-    statement_period: str = None,
+@router.post("/{job_id}/confirm")
+def confirm_import_job(
+    job_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    if not file.filename.endswith('.pdf'):
-        raise HTTPException(status_code=400, detail="File must be a PDF")
+    """Confirm and process all transactions in an import job"""
+    job = db.query(ImportJob).filter(
+        and_(ImportJob.id == job_id, ImportJob.user_id == current_user.id)
+    ).first()
     
-    content = await file.read()
-    transactions_data = parse_pdf(content)
-    
-    if not transactions_data:
-        raise HTTPException(status_code=400, detail="No transactions found in PDF")
-    
-    created_transactions = []
-    for t_data in transactions_data:
-        category_id = auto_categorize_transaction(t_data['merchant'], db, current_user.id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Import job not found")
         
-        transaction = Transaction(
-            user_id=current_user.id,
-            date=t_data['date'],
-            amount=t_data['amount'],
-            merchant=t_data['merchant'],
-            description=t_data.get('description'),
-            bank_name=bank_name,
-            card_last_four=card_last_four,
-            statement_period=statement_period,
-            category_id=category_id,
-            source=TransactionSource.IMPORTED_PDF,
-            status=TransactionStatus.PROCESSED
-        )
-        db.add(transaction)
-        created_transactions.append(transaction)
+    # Update all pending transactions in this job to PROCESSED
+    db.query(Transaction).filter(
+        and_(Transaction.import_job_id == job_id, Transaction.status == TransactionStatus.PENDING)
+    ).update({"status": TransactionStatus.PROCESSED})
     
     db.commit()
+    return {"message": f"Successfully confirmed transactions for import job {job_id}"}
+
+@router.delete("/{job_id}")
+def delete_import_job(
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete an import job and its pending transactions"""
+    job = db.query(ImportJob).filter(
+        and_(ImportJob.id == job_id, ImportJob.user_id == current_user.id)
+    ).first()
     
-    result = []
-    for t in created_transactions:
-        db.refresh(t)
-        result.append(TransactionResponse(
-            id=t.id,
-            date=t.date,
-            amount=t.amount,
-            merchant=t.merchant,
-            description=t.description,
-            transaction_type=t.transaction_type,
-            status=t.status,
-            bank_name=t.bank_name,
-            card_last_four=t.card_last_four,
-            category_id=t.category_id,
-            category_name=t.category.name if t.category else None,
-            account_id=t.account_id,
-            account_name=t.account.name if t.account else None,
-            import_job_id=t.import_job_id,
-            source=t.source,
-            is_anomaly=t.is_anomaly,
-            anomaly_score=t.anomaly_score
-        ))
+    if not job:
+        raise HTTPException(status_code=404, detail="Import job not found")
+        
+    # Delete transactions that are still PENDING
+    db.query(Transaction).filter(
+        and_(Transaction.import_job_id == job_id, Transaction.status == TransactionStatus.PENDING)
+    ).delete()
     
-    return result
+    db.delete(job)
+    db.commit()
+    return {"message": "Import job and pending transactions deleted"}
