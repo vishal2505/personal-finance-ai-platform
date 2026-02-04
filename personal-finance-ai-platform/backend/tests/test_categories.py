@@ -388,7 +388,7 @@ class TestUpdateCategory:
             headers=auth_headers
         ).json()
         
-        cat_c = client.post(
+        client.post(
             "/api/categories/",
             json={"name": "Category C", "type": "expense", "parent_id": cat_b["id"]},
             headers=auth_headers
