@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 from app.database import get_db
-from app.models import Transaction, Category, User
-from app.schemas import TransactionResponse, TransactionUpdate, TransactionBulkUpdate
+from app.models import Transaction, Category, User, TransactionSource, TransactionStatus, Account
+from app.schemas import TransactionResponse, TransactionUpdate, TransactionBulkUpdate, TransactionCreate
 from app.auth import get_current_user
 
 router = APIRouter()
@@ -47,7 +47,10 @@ def get_transactions(
             "bank_name": t.bank_name,
             "card_last_four": t.card_last_four,
             "category_id": t.category_id,
-            "category_name": t.category.name if t.category else None,
+            "account_id": t.account_id,
+            "account_name": t.account.name if t.account else None,
+            "import_job_id": t.import_job_id,
+            "source": t.source,
             "is_anomaly": t.is_anomaly,
             "anomaly_score": t.anomaly_score
         }
@@ -88,6 +91,59 @@ def get_transaction_stats(
         "total_amount": float(total_amount),
         "by_category": [{"category": c[0], "total": float(c[1]), "count": c[2]} for c in category_stats]
     }
+
+@router.post("/", response_model=TransactionResponse)
+def create_transaction(
+    transaction_in: TransactionCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a manual transaction"""
+    # Verify category ownership if provided
+    if transaction_in.category_id:
+        category = db.query(Category).filter(
+            and_(Category.id == transaction_in.category_id, Category.user_id == current_user.id)
+        ).first()
+        if not category:
+            raise HTTPException(status_code=404, detail="Category not found")
+            
+    # Verify account ownership if provided
+    if transaction_in.account_id:
+        account = db.query(Account).filter(
+            and_(Account.id == transaction_in.account_id, Account.user_id == current_user.id)
+        ).first()
+        if not account:
+            raise HTTPException(status_code=404, detail="Account not found")
+
+    transaction = Transaction(
+        **transaction_in.dict(),
+        user_id=current_user.id,
+        source=TransactionSource.MANUAL,
+        status=TransactionStatus.PROCESSED  # Manual entries are processed immediately
+    )
+    db.add(transaction)
+    db.commit()
+    db.refresh(transaction)
+    
+    return TransactionResponse(
+        id=transaction.id,
+        date=transaction.date,
+        amount=transaction.amount,
+        merchant=transaction.merchant,
+        description=transaction.description,
+        transaction_type=transaction.transaction_type,
+        status=transaction.status,
+        bank_name=transaction.bank_name,
+        card_last_four=transaction.card_last_four,
+        category_id=transaction.category_id,
+        category_name=transaction.category.name if transaction.category else None,
+        account_id=transaction.account_id,
+        account_name=transaction.account.name if transaction.account else None,
+        import_job_id=transaction.import_job_id,
+        source=transaction.source,
+        is_anomaly=transaction.is_anomaly,
+        anomaly_score=transaction.anomaly_score
+    )
 
 @router.put("/{transaction_id}", response_model=TransactionResponse)
 def update_transaction(
@@ -141,6 +197,10 @@ def update_transaction(
         card_last_four=transaction.card_last_four,
         category_id=transaction.category_id,
         category_name=transaction.category.name if transaction.category else None,
+        account_id=transaction.account_id,
+        account_name=transaction.account.name if transaction.account else None,
+        import_job_id=transaction.import_job_id,
+        source=transaction.source,
         is_anomaly=transaction.is_anomaly,
         anomaly_score=transaction.anomaly_score
     )
