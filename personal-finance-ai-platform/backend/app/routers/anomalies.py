@@ -7,15 +7,49 @@ from app.database import get_db
 from app.models import Transaction, User
 from app.schemas import AnomalyResponse, TransactionResponse
 from app.auth import get_current_user
-from sklearn.ensemble import IsolationForest
-import numpy as np
+import statistics
+
+try:
+    from sklearn.ensemble import IsolationForest  # type: ignore
+except Exception:
+    IsolationForest = None  # type: ignore[assignment]
+
+try:
+    import numpy as np  # type: ignore
+except Exception:
+    np = None  # type: ignore[assignment]
 
 router = APIRouter()
 
 def detect_anomalies(transactions: List[Transaction]) -> List[Transaction]:
-    """Detect anomalous transactions using Isolation Forest"""
+    """Detect anomalous transactions.
+
+    Prefers an ML approach (Isolation Forest) when scikit-learn + numpy are available.
+    Falls back to a simple z-score heuristic if they're not installed (or broken).
+    """
     if len(transactions) < 10:
         return []
+
+    if IsolationForest is None or np is None:
+        amounts = [float(t.amount) for t in transactions]
+        mean = statistics.fmean(amounts)
+        stdev = statistics.pstdev(amounts) or 0.0
+
+        anomalous_transactions: List[Transaction] = []
+        for t in transactions:
+            if stdev == 0.0:
+                z = 0.0
+            else:
+                z = abs((float(t.amount) - mean) / stdev)
+
+            is_anomaly = z >= 2.5
+            t.is_anomaly = bool(is_anomaly)
+            t.anomaly_score = float(min(1.0, z / 5.0))
+
+            if is_anomaly:
+                anomalous_transactions.append(t)
+
+        return anomalous_transactions
     
     # Prepare features: amount, day_of_month, day_of_week
     features = []

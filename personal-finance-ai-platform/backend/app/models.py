@@ -33,9 +33,9 @@ class User(Base):
     __tablename__ = "users"
     
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
-    full_name = Column(String)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    full_name = Column(String(255))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     is_active = Column(Boolean, default=True)
     
@@ -96,7 +96,7 @@ class MerchantRule(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    merchant_pattern = Column(String, nullable=False)  # Pattern to match merchant names
+    merchant_pattern = Column(String(255), nullable=False)  # Pattern to match merchant names
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -151,7 +151,7 @@ class Transaction(Base):
     # Transaction details
     date = Column(DateTime(timezone=True), nullable=False)
     amount = Column(Float, nullable=False)
-    merchant = Column(String, nullable=False)
+    merchant = Column(String(255), nullable=False)
     description = Column(Text)
     transaction_type = Column(SQLEnum(TransactionType), default=TransactionType.DEBIT)
     status = Column(SQLEnum(TransactionStatus), default=TransactionStatus.PENDING)
@@ -183,7 +183,7 @@ class Budget(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)  # None = overall budget
     
-    name = Column(String, nullable=False)
+    name = Column(String(255), nullable=False)
     amount = Column(Float, nullable=False)
     period = Column(SQLEnum(BudgetPeriod), default=BudgetPeriod.MONTHLY)
     start_date = Column(DateTime(timezone=True), nullable=False)

@@ -1,22 +1,24 @@
-import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { Navigate } from 'react-router-dom'
 
 interface PrivateRouteProps {
   children: React.ReactNode
 }
 
 const PrivateRoute: React.FC<PrivateRouteProps> = ({ children }) => {
-  const { user, loading } = useAuth()
+  const { token, loading } = useAuth()
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen grid place-items-center bg-[#f3eee8]">
+        <div className="rounded-2xl bg-white/80 px-6 py-4 text-sm font-semibold text-[#6f6158] shadow ring-1 ring-black/5">
+          Loading...
+        </div>
       </div>
     )
   }
 
-  if (!user) {
+  if (!token) {
     return <Navigate to="/login" replace />
   }
 

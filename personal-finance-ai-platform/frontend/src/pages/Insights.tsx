@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-import { TrendingUp, TrendingDown, AlertCircle, DollarSign, Lightbulb } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { TrendingUp, AlertCircle, DollarSign, Lightbulb } from 'lucide-react'
 
 interface Insight {
   type: string
