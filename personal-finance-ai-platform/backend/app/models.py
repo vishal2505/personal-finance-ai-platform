@@ -22,9 +22,9 @@ class User(Base):
     __tablename__ = "users"
     
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
-    full_name = Column(String)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    full_name = Column(String(255))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     is_active = Column(Boolean, default=True)
     
@@ -37,10 +37,10 @@ class Category(Base):
     __tablename__ = "categories"
     
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
+    name = Column(String(100), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    color = Column(String, default="#3B82F6")
-    icon = Column(String, default="💰")
+    color = Column(String(7), default="#3B82F6")
+    icon = Column(String(32), default="cash")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     user = relationship("User", back_populates="categories")
@@ -51,7 +51,7 @@ class MerchantRule(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    merchant_pattern = Column(String, nullable=False)  # Pattern to match merchant names
+    merchant_pattern = Column(String(255), nullable=False)  # Pattern to match merchant names
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -69,16 +69,15 @@ class Transaction(Base):
     # Transaction details
     date = Column(DateTime(timezone=True), nullable=False)
     amount = Column(Float, nullable=False)
-    merchant = Column(String, nullable=False)
+    merchant = Column(String(255), nullable=False)
     description = Column(Text)
     transaction_type = Column(SQLEnum(TransactionType), default=TransactionType.DEBIT)
     status = Column(SQLEnum(TransactionStatus), default=TransactionStatus.PENDING)
     
     # Bank/Card info
-    bank_name = Column(String)
-    card_last_four = Column(String)
-    statement_period = Column(String)
-    
+    bank_name = Column(String(255))
+    card_last_four = Column(String(4))
+    statement_period = Column(String(50))
     # Metadata
     is_anomaly = Column(Boolean, default=False)
     anomaly_score = Column(Float, default=0.0)
@@ -95,7 +94,7 @@ class Budget(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)  # None = overall budget
     
-    name = Column(String, nullable=False)
+    name = Column(String(255), nullable=False)
     amount = Column(Float, nullable=False)
     period = Column(SQLEnum(BudgetPeriod), default=BudgetPeriod.MONTHLY)
     start_date = Column(DateTime(timezone=True), nullable=False)

@@ -6,7 +6,35 @@ from app.routers import auth, transactions, budgets, insights, anomalies, upload
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
+
 app = FastAPI(title="Personal Finance AI Platform", version="1.0.0")
+
+# --- Seed test user if not present ---
+from app.auth import get_password_hash, get_user_by_email
+from app.models import User
+from sqlalchemy.orm import Session
+from app.database import SessionLocal
+
+def seed_test_user():
+    db: Session = SessionLocal()
+    try:
+        test_email = "test@example.com"
+        test_password = "test123"
+        user = get_user_by_email(db, test_email)
+        if not user:
+            db_user = User(
+                email=test_email,
+                hashed_password=get_password_hash(test_password),
+                full_name="Test User"
+            )
+            db.add(db_user)
+            db.commit()
+            db.refresh(db_user)
+            print("Seeded test user: test@example.com / test123")
+    finally:
+        db.close()
+
+seed_test_user()
 
 # CORS middleware
 app.add_middleware(
