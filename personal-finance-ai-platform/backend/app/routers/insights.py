@@ -1,18 +1,78 @@
 from typing import List
 from datetime import datetime, timedelta
+import json
+import os
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import and_, text
 from app.database import get_db
 from app.models import Transaction, Category, User
 from app.schemas import InsightResponse
 from app.auth import get_current_user
-import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
 router = APIRouter()
+
+
+def generate_openai_insights(transactions_data: dict) -> List[InsightResponse]:
+    """
+    Call OpenAI to generate short, actionable insights from transaction summary.
+    Returns empty list if OPENAI_API_KEY is missing or the API call fails.
+    """
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key or not api_key.strip():
+        return []
+
+    monthly = transactions_data.get("monthly_trends") or []
+    top_cat = transactions_data.get("top_category")
+    summary_lines = []
+    if monthly:
+        summary_lines.append("Monthly totals: " + ", ".join(f"{m['month']}: ${m['total']:.2f}" for m in monthly))
+    if top_cat:
+        summary_lines.append(f"Top category: {top_cat['name']} (${top_cat['amount']:.2f})")
+    if not summary_lines:
+        summary_lines.append("No transaction summary available.")
+
+    prompt = f"""You are a personal finance assistant. Based on this user's transaction summary, suggest 1-3 very short insights (savings tip, trend observation, or warning). Be concise.
+
+Transaction summary:
+{chr(10).join(summary_lines)}
+
+Respond with a JSON array only. Each item: {{"type": "trend"|"category"|"tip"|"anomaly", "title": "Short title", "description": "One sentence.", "data": {{}}}}
+Example: [{{"type":"tip","title":"Save on subscriptions","description":"You have multiple subscriptions; consider reviewing them.","data":{{}}}}]"""
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+        )
+        content = (response.choices[0].message.content or "").strip()
+        # Handle markdown code block if present
+        if content.startswith("```"):
+            content = content.split("```")[1]
+            if content.startswith("json"):
+                content = content[4:]
+            content = content.strip()
+        parsed = json.loads(content)
+        if not isinstance(parsed, list):
+            return []
+        insights = []
+        for item in parsed:
+            if isinstance(item, dict) and item.get("title") and item.get("description"):
+                insights.append(InsightResponse(
+                    type=str(item.get("type", "tip"))[:50],
+                    title=str(item["title"])[:200],
+                    description=str(item["description"])[:500],
+                    data=item.get("data") if isinstance(item.get("data"), dict) else None,
+                ))
+        return insights
+    except Exception:
+        return []
 
 def generate_ai_insight(transactions_data: dict) -> List[InsightResponse]:
     """Generate AI-powered insights from transaction data"""
@@ -69,61 +129,69 @@ def generate_ai_insight(transactions_data: dict) -> List[InsightResponse]:
     
     return insights
 
-@router.get("/", response_model=List[InsightResponse])
-def get_insights(
-    months: int = Query(default=3, ge=1, le=12),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    # Get date range
+def _build_transactions_data(db: Session, user_id: int, months: int) -> tuple[list, dict]:
+    """Fetch transactions and build monthly trends + top category + summary dict. Uses raw SQL so it works even when the transactions table has fewer columns (e.g. no source, account_id)."""
     end_date = datetime.now()
     start_date = end_date - timedelta(days=months * 30)
-    
-    # Get transactions
-    transactions = db.query(Transaction).filter(
-        and_(
-            Transaction.user_id == current_user.id,
-            Transaction.date >= start_date,
-            Transaction.date <= end_date
-        )
-    ).all()
-    
-    # Calculate monthly trends
+    # Select only columns that exist in minimal schema (user_id, date, amount, category_id)
+    rows = db.execute(
+        text("""
+            SELECT t.date, t.amount, c.name AS category_name
+            FROM transactions t
+            LEFT JOIN categories c ON c.id = t.category_id
+            WHERE t.user_id = :user_id AND t.date >= :start_date AND t.date <= :end_date
+        """),
+        {"user_id": user_id, "start_date": start_date, "end_date": end_date},
+    ).fetchall()
+
     monthly_trends = {}
-    for t in transactions:
-        month_key = t.date.strftime("%Y-%m")
+    category_totals = {}
+    for row in rows:
+        date_val, amount, cat_name = row[0], float(row[1]), row[2]
+        month_key = date_val.strftime("%Y-%m") if hasattr(date_val, "strftime") else str(date_val)[:7]
         if month_key not in monthly_trends:
             monthly_trends[month_key] = {"month": month_key, "total": 0.0, "count": 0}
-        monthly_trends[month_key]["total"] += t.amount
+        monthly_trends[month_key]["total"] += amount
         monthly_trends[month_key]["count"] += 1
-    
+        if cat_name:
+            category_totals[cat_name] = category_totals.get(cat_name, 0.0) + amount
+
     monthly_trends_list = sorted(monthly_trends.values(), key=lambda x: x["month"])
-    
-    # Top category
-    category_totals = {}
-    for t in transactions:
-        if t.category:
-            cat_name = t.category.name
-            if cat_name not in category_totals:
-                category_totals[cat_name] = 0.0
-            category_totals[cat_name] += t.amount
-    
     top_category = None
     if category_totals:
         top_cat_name = max(category_totals, key=category_totals.get)
         top_category = {"name": top_cat_name, "amount": category_totals[top_cat_name]}
-    
-    # Unusual transactions
-    unusual_transactions = [t for t in transactions if t.is_anomaly]
-    
-    # Prepare data for AI insights
+
     transactions_data = {
         "monthly_trends": monthly_trends_list,
         "top_category": top_category,
-        "unusual_transactions": unusual_transactions,
-        "budget_warnings": []  # Would be populated from budget checks
+        "unusual_transactions": [],
+        "budget_warnings": []
     }
-    
+    return list(rows), transactions_data
+
+
+@router.get("/", response_model=List[InsightResponse])
+def get_insights(
+    months: int = Query(default=3, ge=1, le=12),
+    use_ai: bool = Query(default=False, description="Include OpenAI-generated insights (requires OPENAI_API_KEY)"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get rule-based insights. Set use_ai=true to also include OpenAI-generated insights."""
+    _, transactions_data = _build_transactions_data(db, current_user.id, months)
     insights = generate_ai_insight(transactions_data)
-    
+    if use_ai:
+        insights.extend(generate_openai_insights(transactions_data))
     return insights
+
+
+@router.get("/ai", response_model=List[InsightResponse])
+def get_insights_ai(
+    months: int = Query(default=3, ge=1, le=12),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Test endpoint: insights generated only by OpenAI from transaction summary. Requires OPENAI_API_KEY in .env."""
+    _, transactions_data = _build_transactions_data(db, current_user.id, months)
+    return generate_openai_insights(transactions_data)

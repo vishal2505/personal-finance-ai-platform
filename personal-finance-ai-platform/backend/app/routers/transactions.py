@@ -2,13 +2,72 @@ from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, func
+from sqlalchemy import and_, or_, func, text
 from app.database import get_db
-from app.models import Transaction, Category, User, TransactionSource, TransactionStatus, Account
+from app.models import Transaction, Category, User, TransactionSource, TransactionStatus, TransactionType, Account
 from app.schemas import TransactionResponse, TransactionUpdate, TransactionBulkUpdate, TransactionCreate
 from app.auth import get_current_user
 
 router = APIRouter()
+
+
+def _get_transactions_list(db: Session, user_id: int, start_date: Optional[datetime], end_date: Optional[datetime], category_id: Optional[int], bank_name: Optional[str], skip: int, limit: int) -> List[TransactionResponse]:
+    """Fetch transactions. Uses raw SQL so it works when table is missing source/account_id columns."""
+    conditions = ["t.user_id = :user_id"]
+    params = {"user_id": user_id}
+    if start_date:
+        conditions.append("t.date >= :start_date")
+        params["start_date"] = start_date
+    if end_date:
+        conditions.append("t.date <= :end_date")
+        params["end_date"] = end_date
+    if category_id:
+        conditions.append("t.category_id = :category_id")
+        params["category_id"] = category_id
+    if bank_name:
+        conditions.append("t.bank_name = :bank_name")
+        params["bank_name"] = bank_name
+    where = " AND ".join(conditions)
+    # Use literal integers for LIMIT/OFFSET (MySQL/PyMySQL can reject bound params here)
+    skip = max(0, int(skip))
+    limit = max(1, min(int(limit), 2000))
+    rows = db.execute(
+        text(f"""
+            SELECT t.id, t.date, t.amount, t.merchant, t.description, t.transaction_type, t.status,
+                   t.bank_name, t.card_last_four, t.category_id, c.name AS category_name
+            FROM transactions t
+            LEFT JOIN categories c ON c.id = t.category_id
+            WHERE {where}
+            ORDER BY t.date DESC
+            LIMIT {limit} OFFSET {skip}
+        """),
+        params,
+    ).fetchall()
+    result = []
+    for row in rows:
+        tt = (row[5] or "debit").lower() if isinstance(row[5], str) else "debit"
+        st = (row[6] or "processed").lower() if isinstance(row[6], str) else "processed"
+        result.append(TransactionResponse(
+            id=row[0],
+            date=row[1],
+            amount=float(row[2]),
+            merchant=row[3] or "",
+            description=row[4],
+            transaction_type=TransactionType(tt) if tt in ("debit", "credit") else TransactionType.DEBIT,
+            status=TransactionStatus(st) if st in ("pending", "processed", "reviewed") else TransactionStatus.PROCESSED,
+            bank_name=row[7],
+            card_last_four=row[8],
+            category_id=row[9],
+            category_name=row[10],
+            account_id=None,
+            account_name=None,
+            import_job_id=None,
+            source="manual",
+            is_anomaly=False,
+            anomaly_score=0.0,
+        ))
+    return result
+
 
 @router.get("/", response_model=List[TransactionResponse])
 def get_transactions(
@@ -21,42 +80,7 @@ def get_transactions(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    query = db.query(Transaction).filter(Transaction.user_id == current_user.id)
-    
-    if start_date:
-        query = query.filter(Transaction.date >= start_date)
-    if end_date:
-        query = query.filter(Transaction.date <= end_date)
-    if category_id:
-        query = query.filter(Transaction.category_id == category_id)
-    if bank_name:
-        query = query.filter(Transaction.bank_name == bank_name)
-    
-    transactions = query.order_by(Transaction.date.desc()).offset(skip).limit(limit).all()
-    
-    result = []
-    for t in transactions:
-        trans_dict = {
-            "id": t.id,
-            "date": t.date,
-            "amount": t.amount,
-            "merchant": t.merchant,
-            "description": t.description,
-            "transaction_type": t.transaction_type,
-            "status": t.status,
-            "bank_name": t.bank_name,
-            "card_last_four": t.card_last_four,
-            "category_id": t.category_id,
-            "account_id": t.account_id,
-            "account_name": t.account.name if t.account else None,
-            "import_job_id": t.import_job_id,
-            "source": t.source,
-            "is_anomaly": t.is_anomaly,
-            "anomaly_score": t.anomaly_score
-        }
-        result.append(TransactionResponse(**trans_dict))
-    
-    return result
+    return _get_transactions_list(db, current_user.id, start_date, end_date, category_id, bank_name, skip, limit)
 
 @router.get("/stats")
 def get_transaction_stats(
@@ -65,31 +89,41 @@ def get_transaction_stats(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    query = db.query(Transaction).filter(Transaction.user_id == current_user.id)
-    
+    """Use raw SQL so it works when transactions table is missing source/account_id."""
+    conditions = ["t.user_id = :user_id"]
+    params = {"user_id": current_user.id}
     if start_date:
-        query = query.filter(Transaction.date >= start_date)
+        conditions.append("t.date >= :start_date")
+        params["start_date"] = start_date
     if end_date:
-        query = query.filter(Transaction.date <= end_date)
-    
-    total_count = query.count()
-    total_amount = db.query(func.sum(Transaction.amount)).filter(
-        Transaction.user_id == current_user.id
-    ).scalar() or 0.0
-    
-    # By category
-    category_stats = db.query(
-        Category.name,
-        func.sum(Transaction.amount).label("total"),
-        func.count(Transaction.id).label("count")
-    ).join(Transaction).filter(
-        Transaction.user_id == current_user.id
-    ).group_by(Category.name).all()
-    
+        conditions.append("t.date <= :end_date")
+        params["end_date"] = end_date
+    where = " AND ".join(conditions)
+    count_row = db.execute(
+        text(f"SELECT COUNT(*) FROM transactions t WHERE {where}"),
+        params,
+    ).fetchone()
+    total_count = count_row[0] if count_row else 0
+    sum_row = db.execute(
+        text(f"SELECT COALESCE(SUM(t.amount), 0) FROM transactions t WHERE {where}"),
+        params,
+    ).fetchone()
+    total_amount = float(sum_row[0]) if sum_row else 0.0
+    category_rows = db.execute(
+        text(f"""
+            SELECT c.name, SUM(t.amount), COUNT(t.id)
+            FROM transactions t
+            LEFT JOIN categories c ON c.id = t.category_id
+            WHERE {where}
+            GROUP BY c.name
+        """),
+        params,
+    ).fetchall()
+    by_category = [{"category": r[0] or "Uncategorized", "total": float(r[1] or 0), "count": r[2] or 0} for r in category_rows]
     return {
         "total_count": total_count,
-        "total_amount": float(total_amount),
-        "by_category": [{"category": c[0], "total": float(c[1]), "count": c[2]} for c in category_stats]
+        "total_amount": total_amount,
+        "by_category": by_category,
     }
 
 @router.post("/", response_model=TransactionResponse)

@@ -31,6 +31,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // Ensure every API request includes the token, including absolute URLs like http://localhost:8000/api/...
+  useEffect(() => {
+    const interceptor = axios.interceptors.request.use((config) => {
+      const url = config.url ?? ''
+      const isApiRequest = url.startsWith('/api') || url.includes('/api/')
+      if (isApiRequest) {
+        const t = localStorage.getItem('token')
+        if (t) {
+          config.headers = config.headers ?? {}
+          // Axios v1 may expose headers as AxiosHeaders with set()
+          if (typeof (config.headers as any).set === 'function') {
+            ;(config.headers as any).set('Authorization', `Bearer ${t}`)
+          } else {
+            ;(config.headers as any).Authorization = `Bearer ${t}`
+          }
+        }
+      }
+      return config
+    })
+    return () => axios.interceptors.request.eject(interceptor)
+  }, [])
+
   useEffect(() => {
     const storedToken = localStorage.getItem('token')
     if (storedToken) {

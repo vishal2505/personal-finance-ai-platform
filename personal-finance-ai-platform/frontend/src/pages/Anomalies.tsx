@@ -30,7 +30,7 @@ const Anomalies = () => {
   const fetchAnomalies = async () => {
     setLoading(true)
     try {
-      const response = await axios.get('/api/anomalies', {
+      const response = await axios.get('/api/anomalies/', {
         params: { months }
       })
       setAnomalies(response.data)

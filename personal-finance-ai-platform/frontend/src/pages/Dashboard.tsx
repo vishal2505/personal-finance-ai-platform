@@ -113,7 +113,7 @@ const Dashboard = () => {
             end_date: endDate.toISOString(),
           },
         }),
-        axios.get('/api/transactions', {
+        axios.get('/api/transactions/', {
           params: { limit: 1500, start_date: startDate.toISOString(), end_date: endDate.toISOString() },
         }),
       ])
