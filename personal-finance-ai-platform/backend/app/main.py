@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
 from app.routers import auth, transactions, budgets, insights, anomalies, imports, settings, accounts, upload, categories
+import os
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -9,9 +10,15 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Personal Finance AI Platform", version="1.0.0")
 
 # CORS middleware
+cors_origins_env = os.getenv("CORS_ORIGINS")
+if cors_origins_env:
+    cors_origins = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
+else:
+    cors_origins = ["http://localhost:3000", "http://localhost:5173"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

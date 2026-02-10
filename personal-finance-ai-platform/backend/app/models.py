@@ -33,9 +33,9 @@ class User(Base):
     __tablename__ = "users"
     
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
-    full_name = Column(String)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    full_name = Column(String(255))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     is_active = Column(Boolean, default=True)
     
@@ -96,7 +96,7 @@ class MerchantRule(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    merchant_pattern = Column(String, nullable=False)  # Pattern to match merchant names
+    merchant_pattern = Column(String(255), nullable=False)  # Pattern to match merchant names
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -109,10 +109,10 @@ class Account(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    name = Column(String, nullable=False)  # e.g., "DBS Credit Card"
-    bank_name = Column(String, nullable=False)
-    card_last_four = Column(String)
-    account_type = Column(String, default="credit_card")  # credit_card, debit_card, bank_account
+    name = Column(String(255), nullable=False)  # e.g., "DBS Credit Card"
+    bank_name = Column(String(255), nullable=False)
+    card_last_four = Column(String(4))
+    account_type = Column(String(50), default="credit_card")  # credit_card, debit_card, bank_account
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
@@ -126,10 +126,10 @@ class ImportJob(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
     
-    filename = Column(String, nullable=False)
-    file_type = Column(String, nullable=False)  # csv, pdf
+    filename = Column(String(255), nullable=False)
+    file_type = Column(String(20), nullable=False)  # csv, pdf
     status = Column(SQLEnum(ImportJobStatus), default=ImportJobStatus.PENDING)
-    statement_period = Column(String)
+    statement_period = Column(String(32))
     
     total_transactions = Column(Integer, default=0)
     processed_transactions = Column(Integer, default=0)
@@ -151,15 +151,15 @@ class Transaction(Base):
     # Transaction details
     date = Column(DateTime(timezone=True), nullable=False)
     amount = Column(Float, nullable=False)
-    merchant = Column(String, nullable=False)
+    merchant = Column(String(255), nullable=False)
     description = Column(Text)
     transaction_type = Column(SQLEnum(TransactionType), default=TransactionType.DEBIT)
     status = Column(SQLEnum(TransactionStatus), default=TransactionStatus.PENDING)
     
     # Bank/Card info
-    bank_name = Column(String)
-    card_last_four = Column(String)
-    statement_period = Column(String)
+    bank_name = Column(String(255))
+    card_last_four = Column(String(4))
+    statement_period = Column(String(32))
     
     account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
     import_job_id = Column(Integer, ForeignKey("import_jobs.id"), nullable=True)
@@ -183,7 +183,7 @@ class Budget(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)  # None = overall budget
     
-    name = Column(String, nullable=False)
+    name = Column(String(255), nullable=False)
     amount = Column(Float, nullable=False)
     period = Column(SQLEnum(BudgetPeriod), default=BudgetPeriod.MONTHLY)
     start_date = Column(DateTime(timezone=True), nullable=False)

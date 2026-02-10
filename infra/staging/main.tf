@@ -212,7 +212,9 @@ resource "aws_ecs_task_definition" "app" {
         { name = "DB_HOST", value = aws_db_instance.mysql.address },
         { name = "DB_NAME", value = var.db_name },
         { name = "DB_USER", value = var.db_username },
-        { name = "DB_PORT", value = "3306" }
+        { name = "DB_PASSWORD", value = var.db_password },
+        { name = "DB_PORT", value = "3306" },
+        { name = "CORS_ORIGINS", value = var.cors_origins }
       ]
       # NOTE: do NOT hardcode password; use Secrets Manager later when your backend needs it.
       logConfiguration = {
@@ -271,4 +273,50 @@ resource "aws_db_instance" "mysql" {
 # -----------------------------
 resource "aws_s3_bucket" "statements" {
   bucket = "${local.name_prefix}-statements"
+}
+
+# -----------------------------
+# S3 static site for frontend (demo)
+# -----------------------------
+resource "aws_s3_bucket" "frontend" {
+  bucket = "${local.name_prefix}-frontend"
+}
+
+resource "aws_s3_bucket_website_configuration" "frontend" {
+  bucket = aws_s3_bucket.frontend.id
+
+  index_document {
+    suffix = "index.html"
+  }
+
+  error_document {
+    key = "index.html"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "frontend" {
+  bucket                  = aws_s3_bucket.frontend.id
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
+
+data "aws_iam_policy_document" "frontend_public_read" {
+  statement {
+    effect = "Allow"
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.frontend.arn}/*"]
+  }
+}
+
+resource "aws_s3_bucket_policy" "frontend" {
+  bucket = aws_s3_bucket.frontend.id
+  policy = data.aws_iam_policy_document.frontend_public_read.json
+
+  depends_on = [aws_s3_bucket_public_access_block.frontend]
 }

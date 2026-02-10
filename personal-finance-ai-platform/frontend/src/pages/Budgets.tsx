@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-import { Plus, Trash2, Edit } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { format } from 'date-fns'
 
 interface Budget {

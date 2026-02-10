@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import axios from 'axios'
 import { Link } from 'react-router-dom'
 import { DollarSign, TrendingUp, AlertTriangle, FileText, ArrowUpRight, ArrowDownRight } from 'lucide-react'
-import { format, subMonths } from 'date-fns'
+import { subMonths } from 'date-fns'
 
 interface Stats {
   total_count: number

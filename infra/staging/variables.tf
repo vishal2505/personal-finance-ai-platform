@@ -27,13 +27,18 @@ variable "container_image" {
 
 variable "container_port" {
   type    = number
-  default = 80
+  default = 8000
+}
+
+variable "cors_origins" {
+  type    = string
+  default = "http://localhost:3000,http://localhost:5173"
 }
 
 # RDS MySQL settings (free-tier friendly)
 variable "db_name" {
   type    = string
-  default = "pfai"
+  default = "spendwise_db"
 }
 
 variable "db_username" {

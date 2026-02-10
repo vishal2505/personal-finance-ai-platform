@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { format, subMonths } from 'date-fns'
-import { Filter, Search } from 'lucide-react'
+import { Search } from 'lucide-react'
 
 interface Transaction {
   id: number

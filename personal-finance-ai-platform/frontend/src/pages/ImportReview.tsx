@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { Check, X } from 'lucide-react'
 import { format } from 'date-fns'
 
 interface Transaction {
@@ -20,7 +19,7 @@ const ImportReview = () => {
   const navigate = useNavigate()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [categories, setCategories] = useState<Array<{ id: number; name: string }>>([])
-  const [selectedCategory, setSelectedCategory] = useState<{ [key: number]: number }>({})
+  const [selectedCategory, setSelectedCategory] = useState<{ [key: number]: number | null }>({})
   const [selectedTransactions, setSelectedTransactions] = useState<Set<number>>(new Set())
   const [loading, setLoading] = useState(false)
   const [bulkCategory, setBulkCategory] = useState('')

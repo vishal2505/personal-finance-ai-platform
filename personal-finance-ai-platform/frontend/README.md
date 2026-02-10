@@ -16,6 +16,11 @@ npm run dev
 
 The application will be available at `http://localhost:3000`
 
+If you want to point the frontend at a deployed backend, set `VITE_API_BASE_URL` in a `.env` file:
+```env
+VITE_API_BASE_URL=https://your-backend-host
+```
+
 ## Build
 
 To build for production:
