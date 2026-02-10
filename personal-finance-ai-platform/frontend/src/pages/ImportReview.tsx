@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { Check, X } from 'lucide-react'
 import { format } from 'date-fns'
 
 interface Transaction {
@@ -20,7 +19,7 @@ const ImportReview = () => {
   const navigate = useNavigate()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [categories, setCategories] = useState<Array<{ id: number; name: string }>>([])
-  const [selectedCategory, setSelectedCategory] = useState<{ [key: number]: number }>({})
+  const [selectedCategory, setSelectedCategory] = useState<{ [key: number]: number | null }>({})
   const [selectedTransactions, setSelectedTransactions] = useState<Set<number>>(new Set())
   const [loading, setLoading] = useState(false)
   const [bulkCategory, setBulkCategory] = useState('')
@@ -66,7 +65,7 @@ const ImportReview = () => {
   const handleBulkCategoryChange = (categoryId: string) => {
     setBulkCategory(categoryId)
     if (categoryId && selectedTransactions.size > 0) {
-      const updates: { [key: number]: number } = {}
+      const updates: { [key: number]: number | null } = {}
       selectedTransactions.forEach((id) => {
         updates[id] = parseInt(categoryId)
       })
@@ -230,7 +229,7 @@ const ImportReview = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <select
-                          value={selectedCategory[transaction.id] || transaction.category_id || ''}
+                          value={selectedCategory[transaction.id] ?? transaction.category_id ?? ''}
                           onChange={(e) => handleCategoryChange(transaction.id, e.target.value)}
                           className="border border-gray-300 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         >
