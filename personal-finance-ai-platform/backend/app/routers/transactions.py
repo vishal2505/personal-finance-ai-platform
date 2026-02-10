@@ -47,6 +47,7 @@ def get_transactions(
             "bank_name": t.bank_name,
             "card_last_four": t.card_last_four,
             "category_id": t.category_id,
+            "category_name": t.category.name if t.category else None,
             "account_id": t.account_id,
             "account_name": t.account.name if t.account else None,
             "import_job_id": t.import_job_id,
