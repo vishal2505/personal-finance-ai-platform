@@ -29,6 +29,7 @@ OPENAI_API_KEY=your-openai-api-key-here
 ```
 
 4. Set up MySQL database:
+4. Set up MySQL database:
 ```bash
 # Example using mysql client
 mysql -u root -p -e "CREATE DATABASE spendwise_db;"
@@ -37,6 +38,14 @@ mysql -u root -p -e "CREATE DATABASE spendwise_db;"
 5. Run the application:
 ```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+## Seed dev users (optional)
+
+You can seed one or more users for testing login:
+
+```bash
+python scripts/seed_users.py --user test@example.com:test123:"Test User"
 ```
 
 The API will be available at `http://localhost:8000`
