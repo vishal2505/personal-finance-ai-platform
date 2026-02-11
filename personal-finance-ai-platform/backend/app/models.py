@@ -4,6 +4,10 @@ from sqlalchemy.sql import func
 from app.database import Base
 import enum
 
+def enum_values(enum_cls):
+    """Persist enum .value strings in DB (e.g. 'manual') instead of enum member names (e.g. 'MANUAL')."""
+    return [e.value for e in enum_cls]
+
 class TransactionType(str, enum.Enum):
     DEBIT = "debit"
     CREDIT = "credit"
@@ -157,8 +161,8 @@ class Transaction(Base):
     amount = Column(Float, nullable=False)
     merchant = Column(String(255), nullable=False)
     description = Column(Text)
-    transaction_type = Column(SQLEnum(TransactionType), default=TransactionType.DEBIT)
-    status = Column(SQLEnum(TransactionStatus), default=TransactionStatus.PENDING)
+    transaction_type = Column(SQLEnum(TransactionType, values_callable=enum_values), default=TransactionType.DEBIT)
+    status = Column(SQLEnum(TransactionStatus, values_callable=enum_values), default=TransactionStatus.PENDING)
     
     # Bank/Card info
     bank_name = Column(String(255))
@@ -167,7 +171,7 @@ class Transaction(Base):
     
     account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
     import_job_id = Column(Integer, ForeignKey("import_jobs.id"), nullable=True)
-    source = Column(SQLEnum(TransactionSource), default=TransactionSource.MANUAL)
+    source = Column(SQLEnum(TransactionSource, values_callable=enum_values), default=TransactionSource.MANUAL)
     
     # Metadata
     is_anomaly = Column(Boolean, default=False)
@@ -189,7 +193,7 @@ class Budget(Base):
     
     name = Column(String(255), nullable=False)
     amount = Column(Float, nullable=False)
-    period = Column(SQLEnum(BudgetPeriod), default=BudgetPeriod.MONTHLY)
+    period = Column(SQLEnum(BudgetPeriod, values_callable=enum_values), default=BudgetPeriod.MONTHLY)
     start_date = Column(DateTime(timezone=True), nullable=False)
     end_date = Column(DateTime(timezone=True), nullable=True)
     is_active = Column(Boolean, default=True)

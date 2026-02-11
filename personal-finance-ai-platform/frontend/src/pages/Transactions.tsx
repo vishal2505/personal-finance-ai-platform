@@ -18,8 +18,9 @@ const Transactions = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [categories, setCategories] = useState<Array<{ id: number; name: string }>>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string>('')
   const [filters, setFilters] = useState({
-    startDate: format(subMonths(new Date(), 1), 'yyyy-MM-dd'),
+    startDate: format(subMonths(new Date(), 12), 'yyyy-MM-dd'),
     endDate: format(new Date(), 'yyyy-MM-dd'),
     categoryId: '',
     search: ''
@@ -32,7 +33,7 @@ const Transactions = () => {
 
   const fetchCategories = async () => {
     try {
-      const response = await axios.get('/api/categories')
+      const response = await axios.get('/api/categories/')
       setCategories(response.data)
     } catch (error) {
       console.error('Error fetching categories:', error)
@@ -41,18 +42,19 @@ const Transactions = () => {
 
   const fetchTransactions = async () => {
     setLoading(true)
+    setError('')
     try {
       const params: any = {
-        start_date: new Date(filters.startDate).toISOString(),
-        end_date: new Date(filters.endDate).toISOString(),
+        start_date: new Date(filters.startDate + 'T00:00:00').toISOString(),
+        end_date: new Date(filters.endDate + 'T23:59:59').toISOString(),
         limit: 500
       }
       if (filters.categoryId) {
         params.category_id = parseInt(filters.categoryId)
       }
 
-      const response = await axios.get('/api/transactions', { params })
-      let filtered = response.data
+      const response = await axios.get('/api/transactions/', { params })
+      let filtered = response.data ?? []
 
       if (filters.search) {
         const searchLower = filters.search.toLowerCase()
@@ -64,8 +66,10 @@ const Transactions = () => {
       }
 
       setTransactions(filtered)
-    } catch (error) {
-      console.error('Error fetching transactions:', error)
+    } catch (err: any) {
+      console.error('Error fetching transactions:', err)
+      setError(err.response?.data?.detail || err.message || 'Failed to load transactions')
+      setTransactions([])
     } finally {
       setLoading(false)
     }
@@ -77,6 +81,12 @@ const Transactions = () => {
         <h1 className="text-3xl font-bold text-gray-900">Transactions</h1>
         <p className="mt-2 text-sm text-gray-600">View and filter your transaction history</p>
       </div>
+
+      {error && (
+        <div className="mb-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800 ring-1 ring-red-200">
+          {error}
+        </div>
+      )}
 
       <div className="bg-white shadow rounded-lg p-6 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
