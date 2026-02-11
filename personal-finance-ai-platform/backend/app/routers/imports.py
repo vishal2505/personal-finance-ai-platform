@@ -7,60 +7,71 @@ from app.models import Transaction, User, Category, MerchantRule, Account, Impor
 from app.schemas import TransactionResponse, ImportJobResponse
 from app.auth import get_current_user
 import pdfplumber
-import pandas as pd
+import csv
 import io
 from datetime import datetime
 import re
 
 router = APIRouter()
 
+def _value_present(val) -> bool:
+    """Return True if value is not None and not empty (replaces pd.notna for strings)."""
+    if val is None:
+        return False
+    return str(val).strip() != ""
+
 def parse_csv(file_content: bytes) -> List[dict]:
-    """Parse CSV file and extract transactions"""
+    """Parse CSV file and extract transactions (uses stdlib csv, no pandas)."""
     try:
-        df = pd.read_csv(io.BytesIO(file_content))
+        text = file_content.decode("utf-8", errors="replace")
+        reader = csv.DictReader(io.StringIO(text))
+        rows = list(reader)
+        if not rows:
+            raise ValueError("No data rows in CSV")
+        columns = list(rows[0].keys())
         transactions = []
-        
-        # Common CSV column mappings
-        date_cols = ['date', 'transaction_date', 'Date', 'Transaction Date']
-        amount_cols = ['amount', 'Amount', 'transaction_amount']
-        merchant_cols = ['merchant', 'Merchant', 'description', 'Description', 'vendor']
-        desc_cols = ['description', 'Description', 'details', 'Details']
-        
-        date_col = next((col for col in date_cols if col in df.columns), None)
-        amount_col = next((col for col in amount_cols if col in df.columns), None)
-        merchant_col = next((col for col in merchant_cols if col in df.columns), None)
-        desc_col = next((col for col in desc_cols if col in df.columns), None)
-        
+
+        date_cols = ["date", "transaction_date", "Date", "Transaction Date"]
+        amount_cols = ["amount", "Amount", "transaction_amount"]
+        merchant_cols = ["merchant", "Merchant", "description", "Description", "vendor"]
+        desc_cols = ["description", "Description", "details", "Details"]
+
+        date_col = next((c for c in date_cols if c in columns), None)
+        amount_col = next((c for c in amount_cols if c in columns), None)
+        merchant_col = next((c for c in merchant_cols if c in columns), None)
+        desc_col = next((c for c in desc_cols if c in columns), None)
+
         if not date_col or not amount_col or not merchant_col:
             raise ValueError("Required columns not found in CSV")
-        
-        for _, row in df.iterrows():
+
+        for row in rows:
             try:
-                date_str = str(row[date_col])
-                amount = float(row[amount_col])
-                merchant = str(row[merchant_col])
-                description = str(row[desc_col]) if desc_col and pd.notna(row.get(desc_col)) else None
-                
-                # Try to parse date
+                date_str = str(row.get(date_col, ""))
+                amount = float(row.get(amount_col, 0))
+                merchant = str(row.get(merchant_col, ""))
+                description = str(row[desc_col]).strip() if desc_col and _value_present(row.get(desc_col)) else None
+
                 date = None
-                for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%Y-%m-%d %H:%M:%S']:
+                for fmt in ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%Y-%m-%d %H:%M:%S"]:
                     try:
-                        date = datetime.strptime(date_str, fmt)
+                        date = datetime.strptime(date_str.strip(), fmt)
                         break
-                    except:
+                    except ValueError:
                         continue
-                
+
                 if date:
                     transactions.append({
-                        'date': date,
-                        'amount': abs(amount),
-                        'merchant': merchant,
-                        'description': description
+                        "date": date,
+                        "amount": abs(amount),
+                        "merchant": merchant,
+                        "description": description,
                     })
-            except Exception as e:
+            except (ValueError, TypeError, KeyError):
                 continue
-        
+
         return transactions
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error parsing CSV: {str(e)}")
 

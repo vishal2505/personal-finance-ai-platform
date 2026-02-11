@@ -113,10 +113,10 @@ class Account(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    name = Column(String, nullable=False)  # e.g., "DBS Credit Card"
-    bank_name = Column(String, nullable=False)
-    card_last_four = Column(String)
-    account_type = Column(String, default="credit_card")  # credit_card, debit_card, bank_account
+    name = Column(String(255), nullable=False)  # e.g., "DBS Credit Card"
+    bank_name = Column(String(255), nullable=False)
+    card_last_four = Column(String(4))
+    account_type = Column(String(50), default="credit_card")  # credit_card, debit_card, bank_account
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
@@ -161,9 +161,9 @@ class Transaction(Base):
     status = Column(SQLEnum(TransactionStatus, values_callable=enum_values), default=TransactionStatus.PENDING)
     
     # Bank/Card info
-    bank_name = Column(String)
-    card_last_four = Column(String)
-    statement_period = Column(String)
+    bank_name = Column(String(255))
+    card_last_four = Column(String(4))
+    statement_period = Column(String(100))
     
     account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
     import_job_id = Column(Integer, ForeignKey("import_jobs.id"), nullable=True)
