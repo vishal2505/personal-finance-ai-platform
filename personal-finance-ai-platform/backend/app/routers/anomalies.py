@@ -138,6 +138,10 @@ def get_anomalies(
                 card_last_four=t.card_last_four,
                 category_id=t.category_id,
                 category_name=t.category.name if t.category else None,
+                account_id=t.account_id,
+                account_name=t.account.name if t.account else None,
+                import_job_id=t.import_job_id,
+                source=t.source if t.source else "manual",
                 is_anomaly=t.is_anomaly,
                 anomaly_score=t.anomaly_score
             ),

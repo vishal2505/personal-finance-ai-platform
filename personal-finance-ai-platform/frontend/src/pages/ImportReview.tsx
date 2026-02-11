@@ -37,7 +37,7 @@ const ImportReview = () => {
 
   const fetchPendingTransactions = async () => {
     try {
-      const response = await axios.get('/api/transactions', {
+      const response = await axios.get('/api/transactions/', {
         params: { status: 'pending', limit: 100 }
       })
       setTransactions(response.data)
@@ -48,7 +48,7 @@ const ImportReview = () => {
 
   const fetchCategories = async () => {
     try {
-      const response = await axios.get('/api/categories')
+      const response = await axios.get('/api/categories/')
       setCategories(response.data)
     } catch (error) {
       console.error('Error fetching categories:', error)

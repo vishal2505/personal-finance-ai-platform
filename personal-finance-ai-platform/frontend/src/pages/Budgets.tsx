@@ -41,7 +41,7 @@ const Budgets = () => {
 
   const fetchBudgets = async () => {
     try {
-      const response = await axios.get('/api/budgets')
+      const response = await axios.get('/api/budgets/')
       setBudgets(response.data)
     } catch (error) {
       console.error('Error fetching budgets:', error)
@@ -52,7 +52,7 @@ const Budgets = () => {
 
   const fetchCategories = async () => {
     try {
-      const response = await axios.get('/api/categories')
+      const response = await axios.get('/api/categories/')
       setCategories(response.data)
     } catch (error) {
       console.error('Error fetching categories:', error)
@@ -62,7 +62,7 @@ const Budgets = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      await axios.post('/api/budgets', {
+      await axios.post('/api/budgets/', {
         ...formData,
         amount: parseFloat(formData.amount),
         category_id: formData.category_id ? parseInt(formData.category_id) : null,

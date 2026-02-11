@@ -20,7 +20,7 @@ const Insights = () => {
 
   const fetchInsights = async () => {
     try {
-      const response = await axios.get('/api/insights', {
+      const response = await axios.get('/api/insights/', {
         params: { months }
       })
       setInsights(response.data)

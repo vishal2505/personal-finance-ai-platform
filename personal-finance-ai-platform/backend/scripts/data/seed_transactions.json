@@ -1,0 +1,10 @@
+[
+  { "merchant": "Starbucks", "amount": 6.50, "description": "Latte" },
+  { "merchant": "Grab", "amount": 12.80, "description": "Ride to office" },
+  { "merchant": "Amazon", "amount": 49.99, "description": "Household" },
+  { "merchant": "NTUC FairPrice", "amount": 85.20, "description": "Groceries" },
+  { "merchant": "Restaurant XYZ", "amount": 42.00, "description": "Dinner" },
+  { "merchant": "Spotify", "amount": 9.99, "description": "Subscription" },
+  { "merchant": "Shell", "amount": 65.00, "description": "Fuel" },
+  { "merchant": "DBS Bank", "amount": 3200.00, "description": "Salary", "transaction_type": "credit" }
+]
