@@ -1,42 +1,34 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from urllib.parse import quote_plus
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "mysql+pymysql://user:password@localhost:3306/personal_finance?charset=utf8mb4",
-)
+def build_database_url() -> str:
+    explicit_url = os.getenv("DATABASE_URL")
+    if explicit_url:
+        return explicit_url
 
-def _ensure_db_driver(database_url: str) -> None:
-    if database_url.startswith("mysql+pymysql://"):
-        try:
-            import pymysql  # noqa: F401
-        except ModuleNotFoundError as exc:
-            raise RuntimeError(
-                "Missing MySQL driver: PyMySQL is not installed.\n"
-                "Install it in your backend virtualenv:\n"
-                "  pip install pymysql\n"
-                "Or switch DATABASE_URL to use mysql+mysqlconnector:// and install mysql-connector-python."
-            ) from exc
+    db_user = os.getenv("DB_USER", "pfai_admin")
+    db_password = os.getenv("DB_PASSWORD", "")
+    db_host = os.getenv("DB_HOST", "localhost")
+    db_port = os.getenv("DB_PORT", "3306")
+    db_name = os.getenv("DB_NAME", "spendwise_db")
 
-    if database_url.startswith("mysql+mysqlconnector://"):
-        try:
-            import mysql.connector  # noqa: F401
-        except ModuleNotFoundError as exc:
-            raise RuntimeError(
-                "Missing MySQL driver: mysql-connector-python is not installed.\n"
-                "Install it in your backend virtualenv:\n"
-                "  pip install mysql-connector-python\n"
-                "Or switch DATABASE_URL to use mysql+pymysql:// and install pymysql."
-            ) from exc
+    if db_password:
+        auth = f"{db_user}:{quote_plus(db_password)}"
+    else:
+        auth = db_user
+
+    return f"mysql+pymysql://{auth}@{db_host}:{db_port}/{db_name}"
 
 
-_ensure_db_driver(DATABASE_URL)
+DATABASE_URL = build_database_url()
 
+engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

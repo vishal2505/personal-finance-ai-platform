@@ -3,7 +3,7 @@ uvicorn[standard]==0.24.0
 sqlalchemy==2.0.23
 # MySQL driver for SQLAlchemy (mysql+pymysql://...)
 pymysql==1.1.0
-# psycopg2-binary==2.9.9  # Commented out to avoid install error, using pre-installed version
+# pymysql==1.1.0  # Commented out to avoid install error, using pre-installed version
 python-multipart==0.0.6
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
