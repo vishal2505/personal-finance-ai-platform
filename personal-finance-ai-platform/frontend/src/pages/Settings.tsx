@@ -35,7 +35,7 @@ const Settings = () => {
   const fetchData = async () => {
     try {
       const [categoriesRes, rulesRes] = await Promise.all([
-        axios.get('/api/settings/categories'),
+        axios.get('/api/categories'),
         axios.get('/api/settings/merchant-rules')
       ])
       setCategories(categoriesRes.data)
@@ -51,9 +51,9 @@ const Settings = () => {
     e.preventDefault()
     try {
       if (editingCategory) {
-        await axios.put(`/api/settings/categories/${editingCategory.id}`, categoryForm)
+        await axios.patch(`/api/categories/${editingCategory.id}`, categoryForm)
       } else {
-        await axios.post('/api/settings/categories', categoryForm)
+        await axios.post('/api/categories', categoryForm)
       }
       setShowCategoryModal(false)
       setEditingCategory(null)
@@ -90,7 +90,7 @@ const Settings = () => {
   const handleDeleteCategory = async (id: number) => {
     if (!confirm('Are you sure you want to delete this category?')) return
     try {
-      await axios.delete(`/api/settings/categories/${id}`)
+      await axios.delete(`/api/categories/${id}`)
       fetchData()
     } catch (error) {
       console.error('Error deleting category:', error)

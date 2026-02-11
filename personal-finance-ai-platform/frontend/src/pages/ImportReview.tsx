@@ -48,7 +48,7 @@ const ImportReview = () => {
 
   const fetchCategories = async () => {
     try {
-      const response = await axios.get('/api/settings/categories')
+      const response = await axios.get('/api/categories')
       setCategories(response.data)
     } catch (error) {
       console.error('Error fetching categories:', error)
