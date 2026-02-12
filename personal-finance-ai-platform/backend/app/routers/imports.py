@@ -126,47 +126,105 @@ def parse_pdf(file_content: bytes) -> List[dict]:
     
     return transactions
 
-def auto_categorize_transaction(merchant: str, db: Session, user_id: int) -> int:
-    """Auto-categorize transaction using merchant rules"""
-    # Check merchant rules first
+def _preprocess_merchant(merchant: str) -> str:
+    """Preprocess merchant name for better matching.
+    
+    - Strips whitespace
+    - Converts to lowercase
+    - Removes special characters
+    - Normalizes spaces
+    
+    Args:
+        merchant: Raw merchant name
+        
+    Returns:
+        Cleaned merchant name
+    """
+    if not merchant or not isinstance(merchant, str):
+        return ""
+    
+    # Strip and convert to lowercase
+    cleaned = merchant.strip().lower()
+    
+    # Normalize spaces (remove extra whitespace)
+    cleaned = ' '.join(cleaned.split())
+    
+    # Remove special characters, keep only alphanumeric and spaces
+    cleaned = re.sub(r'[^a-z0-9\s]', '', cleaned)
+    
+    return cleaned
+
+
+def auto_categorize_transaction(merchant: str, db: Session, user_id: int) -> Optional[int]:
+    """Auto-categorize transaction using merchant rules with preprocessing and optimization.
+    
+    Strategy:
+    1. Preprocesses merchant input (strips, lowercases, removes special chars)
+    2. Checks user-defined merchant rules first
+    3. Uses keyword dictionary map for pattern matching
+    4. Optimizes by fetching all categories in one query instead of multiple queries
+    
+    Args:
+        merchant: Raw merchant name from transaction
+        db: Database session
+        user_id: User ID for filtering categories and rules
+        
+    Returns:
+        Category ID if matched, None otherwise
+    """
+    
+    # 1. PREPROCESSING: Clean the input
+    merchant_cleaned = _preprocess_merchant(merchant)
+    
+    if not merchant_cleaned:
+        return None
+    
+    # 2. Check merchant rules first (user-defined patterns have priority)
     rules = db.query(MerchantRule).filter(
         MerchantRule.user_id == user_id,
         MerchantRule.is_active == True
     ).all()
     
     for rule in rules:
-        if rule.merchant_pattern.lower() in merchant.lower():
+        if rule.merchant_pattern.lower() in merchant_cleaned:
             return rule.category_id
     
-    # Default categories based on keywords
-    merchant_lower = merchant.lower()
+    # 3. OPTIMIZATION: Fetch all categories once instead of multiple queries
+    categories = db.query(Category).filter(
+        Category.user_id == user_id
+    ).all()
     
-    # Food & Dining
-    if any(kw in merchant_lower for kw in ['restaurant', 'cafe', 'food', 'dining', 'starbucks', 'mcdonald']):
-        category = db.query(Category).filter(
-            Category.user_id == user_id,
-            Category.name.ilike('%food%')
-        ).first()
-        if category:
-            return category.id
+    # Create a lookup map for efficient category matching by name
+    category_lookup = {cat.name.lower(): cat.id for cat in categories}
     
-    # Transportation
-    if any(kw in merchant_lower for kw in ['grab', 'uber', 'taxi', 'transport', 'mrt', 'bus']):
-        category = db.query(Category).filter(
-            Category.user_id == user_id,
-            Category.name.ilike('%transport%')
-        ).first()
-        if category:
-            return category.id
+    # DICTIONARY MAP: Keyword-to-category mapping for pattern matching
+    category_keywords = {
+        'food': ['restaurant', 'cafe', 'food', 'dining', 'starbucks', 'mcdonald', 'pizza', 'burger', 'sushi', 'bakery', 'donut', 'fast food', 'bistro', 'diner', 'grill', 'bbq', 'ramen', 'noodle', 'chicken', 'seafood', 'dessert', 'ice cream', 'coffee', 'tea', 'juice', 'smoothie', 'kopitiam', 'hawker', 'chicken rice', 'laksa', 'satay', 'dim sum', 'yum cha', 'toast box', 'jollibbee', 'chir chir', 'mcspicy'],
+        'transportation': ['grab', 'uber', 'taxi', 'transport', 'mrt', 'bus', 'parking', 'gas', 'fuel', 'carpark', 'petrol', 'lyft', 'train', 'flight', 'airline', 'tolls', 'metro', 'transit', 'uber eats', 'smrt', 'lrt', 'ets', 'gojek'],
+        'shopping': ['shop', 'store', 'retail', 'amazon', 'lazada', 'mall', 'supermarket', 'mart', 'clothing', 'department', 'shopee', 'aliexpress', 'ebay', 'target', 'walmart', 'costco', 'cold storage', 'ntuc', 'giant', 'carrefour', 'courts', 'best denki', 'challenger'],
+        'entertainment': ['movie', 'cinema', 'theatre', 'game', 'spotify', 'netflix', 'streaming', 'arcade', 'karaoke', 'disney', 'hulu', 'youtube', 'twitch', 'steam', 'playstation', 'xbox', 'concert', 'tickets', 'gv', 'shaw', 'cathay', 'golden village', 'bugis plus'],
+        'utilities': ['electric', 'water', 'internet', 'phone', 'utility', 'bills', 'subscription', 'isp', 'telecom', 'energy', 'power', 'broadband', 'wifi', 'singtel', 'starhub', 'm1', 'sp group'],
+        'healthcare': ['hospital', 'clinic', 'pharmacy', 'doctor', 'medical', 'health', 'dentist', 'therapist', 'optician', 'veterinary', 'wellness', 'gym', 'fitness', 'raffles', 'parkway', 'gleneagles', 'mount elizabeth', 'guardian', 'watsons'],
+        'accommodation': ['hotel', 'airbnb', 'resort', 'hostel', 'motel', 'booking', 'accommodation', 'lodging', 'rent', 'apartment', 'village hotel', 'furama', 'swissotel'],
+        'fitness': ['gym', 'yoga', 'fitness', 'sport', 'trainer', 'exercise', 'workout', 'swimming', 'tennis', 'cycling', 'f45', 'orangetheory', 'virgin active', 'year round'],
+        'education': ['school', 'university', 'college', 'course', 'learning', 'tuition', 'education', 'class', 'training', 'udemy', 'nus', 'ntu', 'smu', 'iss'],
+        'insurance': ['insurance', 'premium', 'axa', 'allianz', 'claim', 'ntuc income', 'great eastern', 'aviva', 'oic'],
+        'financial': ['bank', 'atm', 'transfer', 'wire', 'loan', 'mortgage', 'investment', 'brokerage', 'crypto', 'forex', 'dbs', 'ocbc', 'uob', 'maybank', 'cimb', 'ib', 'saxo'],
+        'personal_care': ['salon', 'barber', 'spa', 'massage', 'cosmetics', 'beauty', 'haircut', 'nails', 'grooming', 'hair lab', 'la klinik', 'esthetic'],
+        'gifts_donations': ['gift', 'flowers', 'charity', 'donation', 'donate', 'flower chimp'],
+        'office_supplies': ['office', 'stationery', 'supply', 'supplies', 'paper', 'pen', 'ink', 'popular', 'g1000'],
+        'home_maintenance': ['hardware', 'home depot', 'lowes', 'plumber', 'electrician', 'maintenance', 'repair', 'renovation', 'home improvement', 'bestmart', 'kaison'],
+        'pets': ['pet', 'veterinary', 'vet', 'dog', 'cat', 'petmart', 'pet store', 'only pet', 'pet lovers'],
+        'childcare': ['daycare', 'babysitter', 'nanny', 'childcare'],
+    }
     
-    # Shopping
-    if any(kw in merchant_lower for kw in ['shop', 'store', 'retail', 'amazon', 'lazada']):
-        category = db.query(Category).filter(
-            Category.user_id == user_id,
-            Category.name.ilike('%shopping%')
-        ).first()
-        if category:
-            return category.id
+    # Match merchant against keyword map
+    for category_keyword, keywords in category_keywords.items():
+        if any(kw in merchant_cleaned for kw in keywords):
+            # Search for matching category in lookup
+            for cat_name, cat_id in category_lookup.items():
+                if category_keyword in cat_name:
+                    return cat_id
     
     return None
 
