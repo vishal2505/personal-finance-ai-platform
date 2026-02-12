@@ -20,55 +20,168 @@ def _value_present(val) -> bool:
         return False
     return str(val).strip() != ""
 
+def _sanitize_currency(amount_str: str) -> float:
+    """Sanitize currency string by removing non-numeric characters (except dot and minus).
+    
+    Converts strings like "$1,200.50", "1.200,50", "-$500" to valid floats.
+    
+    Args:
+        amount_str: Raw amount string from CSV
+        
+    Returns:
+        Parsed float value
+        
+    Raises:
+        ValueError: If string cannot be converted to float
+    """
+    if not amount_str:
+        return 0.0
+    
+    # Remove all non-numeric characters except dot and minus
+    sanitized = re.sub(r'[^\d.-]', '', str(amount_str).strip())
+    
+    if not sanitized or sanitized == '-':
+        return 0.0
+    
+    return float(sanitized)
+
+
+def _detect_header_row(lines: List[str], max_lines: int = 20) -> tuple[int, dict]:
+    """Detect the actual header row by finding one that contains both 'date' and 'amount'.
+    
+    Skips account balance headers and other metadata often found in downloaded statements.
+    
+    Args:
+        lines: List of CSV lines
+        max_lines: Maximum number of lines to check before giving up
+        
+    Returns:
+        Tuple of (header_row_index, column_dict) where column_dict maps column names
+        
+    Raises:
+        ValueError: If no valid header row is found
+    """
+    for idx, line in enumerate(lines[:max_lines]):
+        # Parse this line as potential header
+        reader = csv.DictReader(io.StringIO(line))
+        if reader.fieldnames:
+            headers_lower = [h.lower() for h in reader.fieldnames]
+            # Check if this line contains both date and amount keywords
+            has_date = any('date' in h for h in headers_lower)
+            has_amount = any('amount' in h for h in headers_lower)
+            
+            if has_date and has_amount:
+                return idx, dict(zip(reader.fieldnames, reader.fieldnames))
+    
+    raise ValueError("Could not find valid CSV header with 'date' and 'amount' columns")
+
+
 def parse_csv(file_content: bytes) -> List[dict]:
-    """Parse CSV file and extract transactions (uses stdlib csv, no pandas)."""
+    """Parse CSV file and extract transactions with robust header detection and encoding.
+    
+    Features:
+    - Smart encoding detection (UTF-8 with fallback to Latin-1)
+    - Header detection logic: scans first 20 lines for actual headers
+    - Handles account statements with metadata headers
+    - Currency sanitization: removes symbols, commas, normalizes format
+    - Empty row handling: skips rows with all empty values
+    - Multiple date/amount/merchant column name variations
+    
+    Args:
+        file_content: Raw file bytes
+        
+    Returns:
+        List of parsed transaction dictionaries
+        
+    Raises:
+        HTTPException: If parsing fails
+    """
     try:
-        text = file_content.decode("utf-8", errors="replace")
-        reader = csv.DictReader(io.StringIO(text))
+        # SMART ENCODING: Try UTF-8 first, fall back to Latin-1
+        try:
+            text = file_content.decode("utf-8")
+        except UnicodeDecodeError:
+            text = file_content.decode("latin-1")
+        
+        lines = text.strip().split('\n')
+        if not lines:
+            raise ValueError("CSV file is empty")
+        
+        # HEADER DETECTION: Find actual header row (skip account balance, etc.)
+        header_idx, _ = _detect_header_row(lines)
+        
+        # Re-parse CSV starting from detected header
+        csv_text = '\n'.join(lines[header_idx:])
+        reader = csv.DictReader(io.StringIO(csv_text))
         rows = list(reader)
+        
         if not rows:
-            raise ValueError("No data rows in CSV")
+            raise ValueError("No data rows found in CSV after header")
+        
         columns = list(rows[0].keys())
         transactions = []
-
-        date_cols = ["date", "transaction_date", "Date", "Transaction Date"]
-        amount_cols = ["amount", "Amount", "transaction_amount"]
-        merchant_cols = ["merchant", "Merchant", "description", "Description", "vendor"]
-        desc_cols = ["description", "Description", "details", "Details"]
-
-        date_col = next((c for c in date_cols if c in columns), None)
-        amount_col = next((c for c in amount_cols if c in columns), None)
-        merchant_col = next((c for c in merchant_cols if c in columns), None)
-        desc_col = next((c for c in desc_cols if c in columns), None)
-
+        
+        # Column name variations to search for
+        date_cols = ["date", "transaction_date", "Date", "Transaction Date", "Date Time", "datetime"]
+        amount_cols = ["amount", "Amount", "transaction_amount", "Transaction Amount", "value", "Value"]
+        merchant_cols = ["merchant", "Merchant", "description", "Description", "vendor", "Vendor", "details", "Details"]
+        desc_cols = ["description", "Description", "details", "Details", "narration", "Narration", "memo", "Memo"]
+        
+        # Find matching columns (case-insensitive)
+        date_col = next((c for c in columns for dc in date_cols if dc.lower() == c.lower()), None)
+        amount_col = next((c for c in columns for ac in amount_cols if ac.lower() == c.lower()), None)
+        merchant_col = next((c for c in columns for mc in merchant_cols if mc.lower() == c.lower()), None)
+        desc_col = next((c for c in columns for dc in desc_cols if dc.lower() == c.lower()), None)
+        
         if not date_col or not amount_col or not merchant_col:
-            raise ValueError("Required columns not found in CSV")
-
+            raise ValueError(f"Required columns not found. Found: {columns}")
+        
         for row in rows:
+            # EMPTY ROW HANDLING: Skip rows where all values are empty/None
+            if not any(row.values()):
+                continue
+            
             try:
-                date_str = str(row.get(date_col, ""))
-                amount = float(row.get(amount_col, 0))
-                merchant = str(row.get(merchant_col, ""))
-                description = str(row[desc_col]).strip() if desc_col and _value_present(row.get(desc_col)) else None
-
+                date_str = str(row.get(date_col, "")).strip()
+                merchant = str(row.get(merchant_col, "")).strip()
+                
+                # Skip rows with empty required fields
+                if not date_str or not merchant:
+                    continue
+                
+                # CURRENCY SANITIZATION: Remove currency symbols and format issues
+                amount_str = str(row.get(amount_col, "0")).strip()
+                amount = _sanitize_currency(amount_str)
+                
+                # Parse description if available
+                description = None
+                if desc_col and _value_present(row.get(desc_col)):
+                    description = str(row[desc_col]).strip()
+                
+                # Try multiple date formats
                 date = None
-                for fmt in ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%Y-%m-%d %H:%M:%S"]:
+                for fmt in ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%Y-%m-%d %H:%M:%S", 
+                            "%d-%m-%Y", "%m-%d-%Y", "%d %b %Y", "%Y/%m/%d", "%d.%m.%Y"]:
                     try:
-                        date = datetime.strptime(date_str.strip(), fmt)
+                        date = datetime.strptime(date_str, fmt)
                         break
                     except ValueError:
                         continue
-
-                if date:
+                
+                if date and merchant and amount > 0:
                     transactions.append({
                         "date": date,
                         "amount": abs(amount),
                         "merchant": merchant,
                         "description": description,
                     })
-            except (ValueError, TypeError, KeyError):
+            except (ValueError, TypeError, KeyError) as e:
+                # Log and continue with next row
                 continue
-
+        
+        if not transactions:
+            raise ValueError("No valid transactions found in CSV")
+        
         return transactions
     except HTTPException:
         raise
