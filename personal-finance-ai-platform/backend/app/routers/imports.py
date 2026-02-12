@@ -20,34 +20,80 @@ def _value_present(val) -> bool:
         return False
     return str(val).strip() != ""
 
-def _sanitize_currency(amount_str: str) -> float:
-    """Sanitize currency string by removing non-numeric characters (except dot and minus).
+def _parse_amount(amount_str: str, handle_suffix: bool = True) -> float:
+    """Parse amount string, optionally handling Dr/Cr suffixes and currency symbols.
     
-    Converts strings like "$1,200.50", "1.200,50", "-$500" to valid floats.
+    Handles both CSV formats ("$1,200.50") and PDF formats ("50.00 Cr", "500.00 Dr").
     
     Args:
-        amount_str: Raw amount string from CSV
+        amount_str: Raw amount string from file
+        handle_suffix: If True, handles Dr/Cr suffixes; if False, just removes currency symbols
         
     Returns:
-        Parsed float value
-        
-    Raises:
-        ValueError: If string cannot be converted to float
+        Parsed float value (always positive)
     """
-    if not amount_str:
+    if not amount_str or not str(amount_str).strip():
         return 0.0
     
-    # Remove all non-numeric characters except dot and minus
-    sanitized = re.sub(r'[^\d.-]', '', str(amount_str).strip())
+    cleaned = str(amount_str).strip().replace('\n', ' ').strip()
+    is_negative = False
+    
+    if handle_suffix:
+        cleaned_lower = cleaned.lower()
+        if 'dr' in cleaned_lower:
+            is_negative = True
+            cleaned = re.sub(r'\s*dr\s*', '', cleaned, flags=re.IGNORECASE)
+        elif 'cr' in cleaned_lower:
+            cleaned = re.sub(r'\s*cr\s*', '', cleaned, flags=re.IGNORECASE)
+    
+    if cleaned.lstrip().startswith('-'):
+        is_negative = True
+    
+    sanitized = re.sub(r'[^\d.-]', '', cleaned.strip())
     
     if not sanitized or sanitized == '-':
         return 0.0
     
-    return float(sanitized)
+    try:
+        amount = float(sanitized)
+        return abs(amount)
+    except ValueError:
+        return 0.0
 
 
-def _detect_header_row(lines: List[str], max_lines: int = 20) -> tuple[int, dict]:
-    """Detect the actual header row by finding one that contains both 'date' and 'amount'.
+def _parse_date(date_str: str) -> Optional[datetime]:
+    """Parse date string with multiple format support.
+    
+    Tries common date formats used in bank statements.
+    
+    Args:
+        date_str: Raw date string from file
+        
+    Returns:
+        Parsed datetime object or None if parsing fails
+    """
+    if not date_str or not str(date_str).strip():
+        return None
+    
+    cleaned = str(date_str).replace('\n', ' ').strip()
+    
+    date_formats = [
+        "%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%Y-%m-%d %H:%M:%S",
+        "%d-%m-%Y", "%m-%d-%Y", "%d %b %Y", "%Y/%m/%d", "%d.%m.%Y",
+        "%d %b", "%d-%b", "%d/%m"
+    ]
+    
+    for fmt in date_formats:
+        try:
+            return datetime.strptime(cleaned, fmt)
+        except ValueError:
+            continue
+    
+    return None
+
+
+def _detect_header_row(lines: List[str], max_lines: int = 20) -> int:
+    """Detect the actual CSV header row by finding one that contains both 'date' and 'amount'.
     
     Skips account balance headers and other metadata often found in downloaded statements.
     
@@ -56,22 +102,20 @@ def _detect_header_row(lines: List[str], max_lines: int = 20) -> tuple[int, dict
         max_lines: Maximum number of lines to check before giving up
         
     Returns:
-        Tuple of (header_row_index, column_dict) where column_dict maps column names
+        Index of the header row
         
     Raises:
         ValueError: If no valid header row is found
     """
     for idx, line in enumerate(lines[:max_lines]):
-        # Parse this line as potential header
         reader = csv.DictReader(io.StringIO(line))
         if reader.fieldnames:
             headers_lower = [h.lower() for h in reader.fieldnames]
-            # Check if this line contains both date and amount keywords
             has_date = any('date' in h for h in headers_lower)
             has_amount = any('amount' in h for h in headers_lower)
             
             if has_date and has_amount:
-                return idx, dict(zip(reader.fieldnames, reader.fieldnames))
+                return idx
     
     raise ValueError("Could not find valid CSV header with 'date' and 'amount' columns")
 
@@ -107,8 +151,8 @@ def parse_csv(file_content: bytes) -> List[dict]:
         if not lines:
             raise ValueError("CSV file is empty")
         
-        # HEADER DETECTION: Find actual header row (skip account balance, etc.)
-        header_idx, _ = _detect_header_row(lines)
+        # HEADER DETECTION: Find actual header row
+        header_idx = _detect_header_row(lines)
         
         # Re-parse CSV starting from detected header
         csv_text = '\n'.join(lines[header_idx:])
@@ -149,24 +193,17 @@ def parse_csv(file_content: bytes) -> List[dict]:
                 if not date_str or not merchant:
                     continue
                 
-                # CURRENCY SANITIZATION: Remove currency symbols and format issues
+                # Use unified amount parser
                 amount_str = str(row.get(amount_col, "0")).strip()
-                amount = _sanitize_currency(amount_str)
+                amount = _parse_amount(amount_str, handle_suffix=False)
                 
                 # Parse description if available
                 description = None
                 if desc_col and _value_present(row.get(desc_col)):
                     description = str(row[desc_col]).strip()
                 
-                # Try multiple date formats
-                date = None
-                for fmt in ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%Y-%m-%d %H:%M:%S", 
-                            "%d-%m-%Y", "%m-%d-%Y", "%d %b %Y", "%Y/%m/%d", "%d.%m.%Y"]:
-                    try:
-                        date = datetime.strptime(date_str, fmt)
-                        break
-                    except ValueError:
-                        continue
+                # Use unified date parser
+                date = _parse_date(date_str)
                 
                 if date and merchant and amount > 0:
                     transactions.append({
