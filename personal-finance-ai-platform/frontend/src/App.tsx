@@ -3,6 +3,7 @@ import { AuthProvider } from './contexts/AuthContext'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
+import LandingPage from './pages/LandingPage'
 import UploadStatement from './pages/UploadStatement'
 import ImportReview from './pages/ImportReview'
 import Transactions from './pages/Transactions'
@@ -20,13 +21,14 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/" element={<LandingPage />} />
           <Route
             path="/*"
             element={
               <PrivateRoute>
                 <Layout>
                   <Routes>
-                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/upload" element={<UploadStatement />} />
                     <Route path="/import-review" element={<ImportReview />} />
                     <Route path="/transactions" element={<Transactions />} />
