@@ -10,6 +10,14 @@ on:
         description: "Branch, tag, or SHA to deploy"
         required: false
         default: ""
+      action:
+        description: "Terraform action"
+        required: true
+        default: "apply"
+        type: choice
+        options:
+          - apply
+          - destroy
 
 concurrency:
   group: deploy-main
@@ -23,6 +31,9 @@ jobs:
       ECR_REPO: ${{ secrets.ECR_REPO }}
       S3_BUCKET: ${{ secrets.S3_BUCKET }}
       FRONTEND_API_BASE_URL: ${{ secrets.FRONTEND_API_BASE_URL }}
+      TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+      TF_STATE_KEY: ${{ secrets.TF_STATE_KEY }}
+      TF_STATE_LOCK_TABLE: ${{ secrets.TF_STATE_LOCK_TABLE }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,7 +51,11 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
       - name: Build and push backend image
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.action == 'apply' }}
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
@@ -49,24 +64,33 @@ jobs:
           docker push "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
 
       - name: Update terraform.tfvars with new image
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.action == 'apply' }}
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
           sed -i "s|^container_image = \".*\"|container_image = \"$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG\"|" infra/staging/terraform.tfvars
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-
       - name: Terraform init
         working-directory: infra/staging
-        run: terraform init
+        run: |
+          terraform init \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="key=$TF_STATE_KEY" \
+            -backend-config="region=$AWS_REGION"
 
       - name: Terraform apply
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.action == 'apply' }}
         working-directory: infra/staging
         run: terraform apply -auto-approve
 
+      - name: Terraform destroy
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy' }}
+        working-directory: infra/staging
+        run: terraform destroy -auto-approve
+
       - name: Setup Node
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.action == 'apply' }}
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -74,10 +98,12 @@ jobs:
           cache-dependency-path: personal-finance-ai-platform/frontend/package-lock.json
 
       - name: Build frontend
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.action == 'apply' }}
         working-directory: personal-finance-ai-platform/frontend
         run: |
           npm ci
           VITE_API_BASE_URL="$FRONTEND_API_BASE_URL" npm run build
 
       - name: Sync frontend to S3
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.action == 'apply' }}
         run: aws s3 sync personal-finance-ai-platform/frontend/dist "s3://$S3_BUCKET" --delete
