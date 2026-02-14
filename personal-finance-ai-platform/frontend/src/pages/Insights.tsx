@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-import { TrendingUp, AlertCircle, DollarSign, Lightbulb } from 'lucide-react'
+import { Lightbulb, TrendingUp, TrendingDown, AlertTriangle, ArrowRight, DollarSign } from 'lucide-react'
+import Card from '../components/Card'
+import clsx from 'clsx'
+import { format } from 'date-fns'
 
 interface Insight {
   type: string
@@ -12,17 +15,14 @@ interface Insight {
 const Insights = () => {
   const [insights, setInsights] = useState<Insight[]>([])
   const [loading, setLoading] = useState(true)
-  const [months, setMonths] = useState(3)
 
   useEffect(() => {
     fetchInsights()
-  }, [months])
+  }, [])
 
   const fetchInsights = async () => {
     try {
-      const response = await axios.get('/api/insights/', {
-        params: { months }
-      })
+      const response = await axios.get('/api/insights/')
       setInsights(response.data)
     } catch (error) {
       console.error('Error fetching insights:', error)
@@ -31,104 +31,80 @@ const Insights = () => {
     }
   }
 
-  const getInsightIcon = (type: string) => {
+  const getIcon = (type: string) => {
     switch (type) {
       case 'trend':
-        return <TrendingUp className="h-5 w-5" />
+        return <TrendingDown className="h-6 w-6 text-red-500" />
       case 'category':
-        return <DollarSign className="h-5 w-5" />
-      case 'anomaly':
-        return <AlertCircle className="h-5 w-5" />
+        return <DollarSign className="h-6 w-6 text-blue-500" />
       case 'budget':
-        return <AlertCircle className="h-5 w-5" />
+      case 'anomaly':
+        return <AlertTriangle className="h-6 w-6 text-amber-500" />
+      case 'tip':
       default:
-        return <Lightbulb className="h-5 w-5" />
+        return <Lightbulb className="h-6 w-6 text-[#d07a63]" />
     }
   }
 
-  const getInsightColor = (type: string) => {
+  const getBackgroundColor = (type: string) => {
     switch (type) {
       case 'trend':
-        return 'bg-blue-100 text-blue-800'
+        return 'bg-red-50'
       case 'category':
-        return 'bg-green-100 text-green-800'
-      case 'anomaly':
-        return 'bg-yellow-100 text-yellow-800'
+        return 'bg-blue-50'
       case 'budget':
-        return 'bg-red-100 text-red-800'
+      case 'anomaly':
+        return 'bg-amber-50'
       default:
-        return 'bg-gray-100 text-gray-800'
+        return 'bg-[#f4ebe6]'
     }
   }
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8">
-      <div className="mb-8 flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">AI Insights</h1>
-          <p className="mt-2 text-sm text-gray-600">AI-powered insights about your spending patterns</p>
-        </div>
-        <select
-          value={months}
-          onChange={(e) => setMonths(parseInt(e.target.value))}
-          className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-        >
-          <option value={1}>Last Month</option>
-          <option value={3}>Last 3 Months</option>
-          <option value={6}>Last 6 Months</option>
-          <option value={12}>Last Year</option>
-        </select>
+    <div className="p-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-extrabold tracking-tight text-[#2b2521]">AI Insights</h1>
+        <p className="mt-1 text-sm text-[#9a8678]">
+          Smart recommendations to improve your financial health.
+        </p>
       </div>
 
-      {loading ? (
-        <div className="text-center py-12">Loading insights...</div>
-      ) : (
-        <div className="space-y-6">
-          {insights.length === 0 ? (
-            <div className="bg-white shadow rounded-lg p-6 text-center text-gray-500">
-              No insights available. Upload some transactions to get started.
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {insights.map((insight, index) => (
-                  <div
-                    key={index}
-                    className={`bg-white shadow rounded-lg p-6 border-l-4 ${
-                      insight.type === 'trend' ? 'border-blue-500' :
-                      insight.type === 'category' ? 'border-green-500' :
-                      insight.type === 'anomaly' ? 'border-yellow-500' :
-                      'border-red-500'
-                    }`}
-                  >
-                    <div className="flex items-start">
-                      <div className={`flex-shrink-0 ${getInsightColor(insight.type)} rounded-full p-2`}>
-                        {getInsightIcon(insight.type)}
-                      </div>
-                      <div className="ml-4 flex-1">
-                        <h3 className="text-lg font-medium text-gray-900">{insight.title}</h3>
-                        <p className="mt-2 text-sm text-gray-600">{insight.description}</p>
-                        {insight.data && (
-                          <div className="mt-4 text-xs text-gray-500">
-                            {JSON.stringify(insight.data, null, 2)}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {loading ? (
+          <div className="col-span-full py-12 text-center text-[#9a8678]">Analyzing finances...</div>
+        ) : insights.length === 0 ? (
+          <div className="col-span-full py-12 text-center text-[#9a8678]">
+            No insights available yet. Add more transactions to generate analysis.
+          </div>
+        ) : (
+          insights.map((insight, index) => (
+            <Card key={index} className="flex flex-col justify-between transition hover:shadow-lg">
+              <div>
+                <div
+                  className={clsx(
+                    'mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl',
+                    getBackgroundColor(insight.type)
+                  )}
+                >
+                  {getIcon(insight.type)}
+                </div>
+                <h3 className="mb-2 text-lg font-bold text-[#2b2521]">
+                  {insight.title}
+                </h3>
+                <p className="text-sm leading-relaxed text-[#6f6158]">{insight.description}</p>
               </div>
-
-              <div className="bg-white shadow rounded-lg p-6">
-                <h2 className="text-lg font-medium text-gray-900 mb-4">Spending Overview</h2>
-                <p className="text-sm text-gray-600 mb-4">
-                  View detailed analytics and trends in the Transactions and Dashboard pages.
-                </p>
+              <div className="mt-6 flex items-center justify-between border-t border-[#f0ebe6] pt-4">
+                <span className="text-xs font-semibold text-[#b8a79c]">
+                  AI Generated
+                </span>
+                {/* <button className="flex items-center gap-1 text-xs font-bold text-[#d07a63] transition hover:text-[#b85f4a]">
+                  View Details <ArrowRight className="h-3 w-3" />
+                </button> */}
               </div>
-            </>
-          )}
-        </div>
-      )}
+            </Card>
+          ))
+        )}
+      </div>
     </div>
   )
 }
