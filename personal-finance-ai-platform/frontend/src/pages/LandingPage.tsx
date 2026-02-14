@@ -50,7 +50,7 @@ const LandingPage = () => {
                     <div className="flex items-center gap-4">
                         <Link
                             to="/login"
-                            className="text-sm font-medium text-[#6f6158] hover:text-[#2b2521]"
+                            className="rounded-full border-2 border-[#d07a63] px-5 py-2.5 text-white font-semibold text-[#d07a63] transition hover:bg-[#d07a63] hover:text-white"
                         >
                             Log In
                         </Link>

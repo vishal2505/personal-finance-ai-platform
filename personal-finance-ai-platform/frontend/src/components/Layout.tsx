@@ -42,68 +42,69 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     .join('')
 
   return (
-    <div className="min-h-screen bg-[#c8c8c8] p-6">
-      <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-7xl overflow-hidden rounded-3xl border border-black/5 bg-[#fbf8f4] shadow-[0_30px_80px_rgba(0,0,0,0.35)]">
-        <aside className="flex w-72 flex-col gap-6 border-r border-black/5 bg-white/70 px-6 py-6 backdrop-blur">
-          <SpendWiseLogo />
+    <div className="flex h-screen bg-[#fbf8f4] overflow-hidden">
+      <aside className="hidden w-72 flex-col gap-6 border-r border-[#e8e4df] bg-white px-6 py-6 md:flex">
+        <SpendWiseLogo />
 
-          <nav className="flex-1 space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon
-              const isActive = item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path)
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={clsx(
-                    'group relative flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition',
-                    isActive
-                      ? 'bg-[#f4ebe6] text-[#cc735d] shadow-sm ring-1 ring-black/5'
-                      : 'text-[#6f6158] hover:bg-black/5'
-                  )}
-                >
-                  <Icon className={clsx('h-5 w-5', isActive ? 'text-[#cc735d]' : 'text-[#9a8678]')} />
-                  <span className="flex-1">{item.label}</span>
-                  {'badge' in item && item.badge && (
-                    <span className="rounded-full bg-[#ffe9e2] px-2 py-0.5 text-[10px] font-extrabold tracking-wide text-[#cc735d]">
-                      {item.badge}
-                    </span>
-                  )}
-                </Link>
-              )
-            })}
-          </nav>
-
-          <div className="rounded-2xl bg-white/80 p-4 ring-1 ring-black/5">
-            <div className="flex items-center gap-3">
-              <div className="grid h-10 w-10 place-items-center rounded-full bg-[#f4ebe6] text-sm font-extrabold text-[#cc735d]">
-                {initials || 'U'}
-              </div>
-              <div className="min-w-0">
-                <div className="truncate text-sm font-semibold text-[#2b2521]">{displayName}</div>
-                <div className="text-xs text-[#9a8678]">Pro Account</div>
-              </div>
+        <nav className="flex-1 space-y-1">
+          {navItems.map((item) => {
+            const Icon = item.icon
+            const isActive = item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path)
+            return (
               <Link
-                to="/settings"
-                className="ml-auto grid h-9 w-9 place-items-center rounded-xl text-[#9a8678] transition hover:bg-black/5"
-                aria-label="Settings"
+                key={item.path}
+                to={item.path}
+                className={clsx(
+                  'group relative flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition',
+                  isActive
+                    ? 'bg-[#f4ebe6] text-[#cc735d] shadow-sm ring-1 ring-black/5'
+                    : 'text-[#6f6158] hover:bg-black/5'
+                )}
               >
-                <Settings className="h-4 w-4" />
+                <Icon className={clsx('h-5 w-5', isActive ? 'text-[#cc735d]' : 'text-[#9a8678]')} />
+                <span className="flex-1">{item.label}</span>
+                {'badge' in item && item.badge && (
+                  <span className="rounded-full bg-[#ffe9e2] px-2 py-0.5 text-[10px] font-extrabold tracking-wide text-[#cc735d]">
+                    {item.badge}
+                  </span>
+                )}
               </Link>
+            )
+          })}
+        </nav>
+
+        <div className="rounded-2xl bg-white/80 p-4 ring-1 ring-black/5">
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-full bg-[#f4ebe6] text-sm font-extrabold text-[#cc735d]">
+              {initials || 'U'}
             </div>
-
-            <button
-              onClick={logout}
-              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-black/90 px-4 py-2 text-sm font-semibold text-white transition hover:bg-black"
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-[#2b2521]">{displayName}</div>
+              <div className="text-xs text-[#9a8678]">Pro Account</div>
+            </div>
+            <Link
+              to="/settings"
+              className="ml-auto grid h-9 w-9 place-items-center rounded-xl text-[#9a8678] transition hover:bg-black/5"
+              aria-label="Settings"
             >
-              <LogOut className="h-4 w-4" />
-              Logout
-            </button>
+              <Settings className="h-4 w-4" />
+            </Link>
           </div>
-        </aside>
 
-        <main className="flex-1 overflow-y-auto">{children}</main>
-      </div>
+          <button
+            onClick={() => {
+              logout()
+              window.location.href = '/'
+            }}
+            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-black/90 px-4 py-2 text-sm font-semibold text-white transition hover:bg-black"
+          >
+            <LogOut className="h-4 w-4" />
+            Logout
+          </button>
+        </div>
+      </aside>
+
+      <main className="flex-1 overflow-y-auto">{children}</main>
     </div>
   )
 }
