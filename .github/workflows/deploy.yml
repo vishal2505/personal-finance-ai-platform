@@ -102,7 +102,7 @@ jobs:
         working-directory: personal-finance-ai-platform/frontend
         run: |
           npm ci
-          VITE_API_BASE_URL="$FRONTEND_API_BASE_URL" npm run build
+          VITE_API_BASE_URL="$FRONTEND_API_BASE_URL" npm run build:ci
 
       - name: Sync frontend to S3
         if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.action == 'apply' }}
