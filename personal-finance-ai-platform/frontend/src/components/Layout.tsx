@@ -23,7 +23,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation()
 
   const navItems = [
-    { path: '/', icon: LayoutDashboard, label: 'Overview' },
+    { path: '/dashboard', icon: LayoutDashboard, label: 'Overview' },
     { path: '/upload', icon: Upload, label: 'Upload Statement' },
     { path: '/import-review', icon: FileCheck, label: 'Import Review' },
     { path: '/transactions', icon: FileText, label: 'Transactions' },
