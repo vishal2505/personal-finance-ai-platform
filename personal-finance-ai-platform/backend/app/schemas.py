@@ -21,9 +21,14 @@ class UserResponse(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    status: Optional[str] = "success"  # "success" or "2fa_required"
 
 class TokenData(BaseModel):
     email: Optional[str] = None
+    scopes: List[str] = []
+
+class TwoFactorVerify(BaseModel):
+    code: str
 
 # Transaction schemas
 class TransactionCreate(BaseModel):

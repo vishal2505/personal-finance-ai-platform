@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { Upload, FileText, File } from 'lucide-react'
+import { Upload, FileText, File, X, Sparkles } from 'lucide-react'
+import Card from '../components/Card'
+import clsx from 'clsx'
 
 const UploadStatement = () => {
   const [file, setFile] = useState<File | null>(null)
@@ -57,127 +59,149 @@ const UploadStatement = () => {
   }
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8">
+    <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Upload Statement</h1>
-        <p className="mt-2 text-sm text-gray-600">Upload your credit card or bank statement (PDF or CSV)</p>
+        <h1 className="text-3xl font-extrabold tracking-tight text-[#2b2521]">Upload Statement</h1>
+        <p className="mt-1 text-sm text-[#9a8678]">
+          Upload your bank statement (PDF or CSV) to automatically categorize transactions.
+        </p>
       </div>
 
-      <div className="max-w-2xl">
-        <form onSubmit={handleSubmit} className="bg-white shadow rounded-lg p-6 space-y-6">
-          {error && (
-            <div className="rounded-md bg-red-50 p-4">
-              <p className="text-sm text-red-800">{error}</p>
-            </div>
-          )}
+      <div className="mx-auto max-w-2xl">
+        <Card>
+          <form onSubmit={handleSubmit} className="space-y-8">
+            {error && (
+              <div className="rounded-2xl bg-red-50 p-4 text-sm text-red-800 ring-1 ring-red-200">
+                {error}
+              </div>
+            )}
 
-          {success && (
-            <div className="rounded-md bg-green-50 p-4">
-              <p className="text-sm text-green-800">File uploaded successfully! Redirecting to review...</p>
-            </div>
-          )}
+            {success && (
+              <div className="rounded-2xl bg-green-50 p-4 text-sm text-green-800 ring-1 ring-green-200">
+                File uploaded successfully! Redirecting to review...
+              </div>
+            )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Statement File (PDF or CSV)
-            </label>
-            <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:border-gray-400 transition">
-              <div className="space-y-1 text-center">
-                {file ? (
-                  <div className="flex items-center justify-center space-x-2">
-                    {file.name.endsWith('.pdf') ? (
-                      <FileText className="h-8 w-8 text-blue-500" />
-                    ) : (
-                      <File className="h-8 w-8 text-green-500" />
-                    )}
-                    <span className="text-sm text-gray-600">{file.name}</span>
-                  </div>
-                ) : (
-                  <>
-                    <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                    <div className="flex text-sm text-gray-600">
-                      <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500">
-                        <span>Upload a file</span>
-                        <input
-                          type="file"
-                          className="sr-only"
-                          accept=".pdf,.csv"
-                          onChange={handleFileChange}
-                        />
-                      </label>
-                      <p className="pl-1">or drag and drop</p>
-                    </div>
-                    <p className="text-xs text-gray-500">PDF or CSV up to 10MB</p>
-                  </>
+            <div>
+              <label className="mb-3 block text-sm font-bold uppercase tracking-wider text-[#b8a79c]">
+                Statement File
+              </label>
+              <div
+                className={clsx(
+                  'relative flex h-64 flex-col items-center justify-center rounded-2xl border-2 border-dashed transition',
+                  file
+                    ? 'border-[#d07a63] bg-[#fff7f4]'
+                    : 'border-[#e8e4df] bg-[#fbf8f4] hover:border-[#d07a63] hover:bg-white'
                 )}
+              >
+                <div className="space-y-4 text-center">
+                  {file ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="grid h-16 w-16 place-items-center rounded-full bg-white shadow-sm ring-1 ring-black/5">
+                        {file.name.endsWith('.pdf') ? (
+                          <FileText className="h-8 w-8 text-[#d07a63]" />
+                        ) : (
+                          <File className="h-8 w-8 text-[#2b2521]" />
+                        )}
+                      </div>
+                      <div className="font-semibold text-[#2b2521]">{file.name}</div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          setFile(null)
+                        }}
+                        className="flex items-center gap-1.5 rounded-full bg-[#f4ebe6] px-3 py-1 text-xs font-bold text-[#cc735d] transition hover:bg-[#ebd5ce]"
+                      >
+                        <X className="h-3 w-3" />
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-white shadow-sm ring-1 ring-black/5">
+                        <Upload className="h-8 w-8 text-[#9a8678]" />
+                      </div>
+                      <div className="text-sm">
+                        <label className="relative cursor-pointer rounded-md font-bold text-[#d07a63] focus-within:outline-none focus-within:ring-2 focus-within:ring-[#d07a63] focus-within:ring-offset-2 hover:text-[#b85f4a]">
+                          <span>Upload a file</span>
+                          <input
+                            type="file"
+                            className="sr-only"
+                            accept=".pdf,.csv"
+                            onChange={handleFileChange}
+                          />
+                        </label>
+                        <span className="pl-1 text-[#9a8678]">or drag and drop</span>
+                      </div>
+                      <p className="text-xs text-[#b8a79c]">PDF or CSV up to 10MB</p>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-            {file && (
-              <button
-                type="button"
-                onClick={() => setFile(null)}
-                className="mt-2 text-sm text-red-600 hover:text-red-800"
-              >
-                Remove file
-              </button>
-            )}
-          </div>
 
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            <div>
-              <label htmlFor="bank-name" className="block text-sm font-medium text-gray-700">
-                Bank Name (optional)
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+              <div className="space-y-1">
+                <label htmlFor="bank-name" className="text-xs font-bold uppercase tracking-wider text-[#b8a79c]">
+                  Bank Name <span className="text-[#e8e4df]">(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  id="bank-name"
+                  className="w-full rounded-xl border-0 bg-[#fbf8f4] py-3 text-sm font-semibold text-[#2b2521] ring-1 ring-[#e8e4df] placeholder:text-[#b8a79c] focus:ring-2 focus:ring-[#d07a63]"
+                  placeholder="e.g. Chase"
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label htmlFor="card-last-four" className="text-xs font-bold uppercase tracking-wider text-[#b8a79c]">
+                  Card Last 4 <span className="text-[#e8e4df]">(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  id="card-last-four"
+                  maxLength={4}
+                  className="w-full rounded-xl border-0 bg-[#fbf8f4] py-3 text-sm font-semibold text-[#2b2521] ring-1 ring-[#e8e4df] placeholder:text-[#b8a79c] focus:ring-2 focus:ring-[#d07a63]"
+                  placeholder="1234"
+                  value={cardLastFour}
+                  onChange={(e) => setCardLastFour(e.target.value.replace(/\D/g, ''))}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label htmlFor="statement-period" className="text-xs font-bold uppercase tracking-wider text-[#b8a79c]">
+                Period <span className="text-[#e8e4df]">(Optional)</span>
               </label>
               <input
                 type="text"
-                id="bank-name"
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                placeholder="e.g., DBS, OCBC, UOB"
-                value={bankName}
-                onChange={(e) => setBankName(e.target.value)}
+                id="statement-period"
+                className="w-full rounded-xl border-0 bg-[#fbf8f4] py-3 text-sm font-semibold text-[#2b2521] ring-1 ring-[#e8e4df] placeholder:text-[#b8a79c] focus:ring-2 focus:ring-[#d07a63]"
+                placeholder="e.g. October 2023"
+                value={statementPeriod}
+                onChange={(e) => setStatementPeriod(e.target.value)}
               />
             </div>
 
-            <div>
-              <label htmlFor="card-last-four" className="block text-sm font-medium text-gray-700">
-                Card Last 4 Digits (optional)
-              </label>
-              <input
-                type="text"
-                id="card-last-four"
-                maxLength={4}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                placeholder="1234"
-                value={cardLastFour}
-                onChange={(e) => setCardLastFour(e.target.value.replace(/\D/g, ''))}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="statement-period" className="block text-sm font-medium text-gray-700">
-              Statement Period (optional)
-            </label>
-            <input
-              type="text"
-              id="statement-period"
-              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              placeholder="e.g., January 2024"
-              value={statementPeriod}
-              onChange={(e) => setStatementPeriod(e.target.value)}
-            />
-          </div>
-
-          <div>
             <button
               type="submit"
               disabled={loading || !file}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              className="group flex w-full items-center justify-center gap-2 rounded-xl bg-[#2b2521] py-4 text-sm font-bold text-white shadow-xl transition hover:bg-[#4a403a] disabled:opacity-50"
             >
-              {loading ? 'Uploading...' : 'Upload Statement'}
+              {loading ? (
+                'Processing...'
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4 text-[#d07a63] transition group-hover:text-white" />
+                  Process Statement with AI
+                </>
+              )}
             </button>
-          </div>
-        </form>
+          </form>
+        </Card>
       </div>
     </div>
   )

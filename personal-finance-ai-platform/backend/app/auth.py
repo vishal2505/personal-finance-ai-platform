@@ -58,6 +58,9 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
     return user
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+    """
+    Validates the token and requires the 'access' scope (fully authenticated).
+    """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -66,10 +69,54 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
+        scopes: list = payload.get("scopes", [])
         if email is None:
             raise credentials_exception
+        token_data = {"email": email, "scopes": scopes}
     except JWTError:
         raise credentials_exception
+        
+    # Enforce 'access' scope for regular protected routes
+    if "access" not in token_data["scopes"]:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="2FA verification required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = get_user_by_email(db, email=email)
+    if user is None:
+        raise credentials_exception
+    return user
+
+async def get_pending_2fa_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+    """
+    Validates the token and requires '2fa_pending' scope. 
+    Used ONLY for the /verify-2fa endpoint.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        scopes: list = payload.get("scopes", [])
+        if email is None:
+            raise credentials_exception
+        token_data = {"email": email, "scopes": scopes}
+    except JWTError:
+        raise credentials_exception
+
+    # Enforce '2fa_pending' scope
+    if "2fa_pending" not in token_data["scopes"]:
+         raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token scope for 2FA verification",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     user = get_user_by_email(db, email=email)
     if user is None:
         raise credentials_exception

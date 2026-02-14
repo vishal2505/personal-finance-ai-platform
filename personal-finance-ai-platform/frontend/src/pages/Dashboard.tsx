@@ -16,9 +16,12 @@ interface Transaction {
   date: string
   amount: number
   category_name?: string | null
+  transaction_type?: 'credit' | 'debit'
 }
 
 type TrendView = 'week' | 'month'
+
+import Card from '../components/Card'
 
 const currency = (value: number) =>
   value.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
@@ -30,17 +33,6 @@ const getCategoryIcon = (name: string) => {
   if (n.includes('home') || n.includes('housing') || n.includes('rent')) return Home
   return Tag
 }
-
-const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className }) => (
-  <div
-    className={clsx(
-      'rounded-3xl bg-white/80 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.08)] ring-1 ring-black/5 backdrop-blur',
-      className
-    )}
-  >
-    {children}
-  </div>
-)
 
 const StatCard: React.FC<{
   icon: React.ElementType
@@ -92,21 +84,21 @@ const Dashboard = () => {
   const { user } = useAuth()
   const [stats, setStats] = useState<Stats | null>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [budgets, setBudgets] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [monthlyTrend, setMonthlyTrend] = useState<{ current: number; previous: number } | null>(null)
   const [trendView, setTrendView] = useState<TrendView>('week')
 
   useEffect(() => {
-    fetchStats()
+    fetchData()
   }, [])
 
-  const fetchStats = async () => {
+  const fetchData = async () => {
     setLoading(true)
     try {
       const endDate = new Date()
       const startDate = subMonths(endDate, 3)
 
-      const [statsRes, transactionsRes] = await Promise.all([
+      const [statsRes, transactionsRes, budgetsRes] = await Promise.all([
         axios.get('/api/transactions/stats', {
           params: {
             start_date: startDate.toISOString(),
@@ -114,28 +106,16 @@ const Dashboard = () => {
           },
         }),
         axios.get('/api/transactions/', {
-          params: { limit: 1500, start_date: startDate.toISOString(), end_date: endDate.toISOString() },
+          params: { limit: 2000 },
         }),
+        axios.get('/api/budgets/'),
       ])
 
       setStats(statsRes.data)
       setTransactions(transactionsRes.data)
-
-      const currentMonth = transactionsRes.data.filter((t: Transaction) => {
-        const date = new Date(t.date)
-        return date.getMonth() === endDate.getMonth() && date.getFullYear() === endDate.getFullYear()
-      })
-      const previousMonth = transactionsRes.data.filter((t: Transaction) => {
-        const date = new Date(t.date)
-        const prevMonth = subMonths(endDate, 1)
-        return date.getMonth() === prevMonth.getMonth() && date.getFullYear() === prevMonth.getFullYear()
-      })
-
-      const currentTotal = currentMonth.reduce((sum: number, t: Transaction) => sum + Number(t.amount || 0), 0)
-      const previousTotal = previousMonth.reduce((sum: number, t: Transaction) => sum + Number(t.amount || 0), 0)
-      setMonthlyTrend({ current: currentTotal, previous: previousTotal })
+      setBudgets(budgetsRes.data)
     } catch (error) {
-      console.error('Error fetching stats:', error)
+      console.error('Error fetching dashboard data:', error)
     } finally {
       setLoading(false)
     }
@@ -146,10 +126,64 @@ const Dashboard = () => {
     return raw.split(' ')[0] || raw
   }, [user?.email, user?.full_name])
 
-  const monthlyChange = useMemo(() => {
-    if (!monthlyTrend || monthlyTrend.previous <= 0) return null
-    return ((monthlyTrend.current - monthlyTrend.previous) / monthlyTrend.previous) * 100
-  }, [monthlyTrend])
+  // --- Metrics Calculation ---
+
+  const { netBalance, monthlySavings, monthlyTrend, monthlyChange } = useMemo(() => {
+    const now = new Date()
+    const currentMonth = now.getMonth()
+    const currentYear = now.getFullYear()
+    const prevMonthDate = subMonths(now, 1)
+
+    let balance = 0
+    let currentMonthIncome = 0
+    let currentMonthExpense = 0
+    let prevMonthExpense = 0
+
+    transactions.forEach((t) => {
+      const tDate = new Date(t.date)
+      const amount = Number(t.amount || 0)
+      const isCredit = t.transaction_type === 'credit'
+
+      // Net Balance (All Time)
+      if (isCredit) balance += amount
+      else balance -= amount
+
+      // Monthly Stats
+      if (tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear) {
+        if (isCredit) currentMonthIncome += amount
+        else currentMonthExpense += amount
+      } else if (tDate.getMonth() === prevMonthDate.getMonth() && tDate.getFullYear() === prevMonthDate.getFullYear()) {
+        if (!isCredit) prevMonthExpense += amount
+      }
+    })
+
+    const mSavings = currentMonthIncome - currentMonthExpense
+
+    // Calculate trend percentage
+    let mChange: number | null = null
+    if (prevMonthExpense > 0) {
+      mChange = ((currentMonthExpense - prevMonthExpense) / prevMonthExpense) * 100
+    }
+
+    return {
+      netBalance: balance,
+      monthlySavings: mSavings,
+      monthlyTrend: currentMonthExpense,
+      monthlyChange: mChange
+    }
+  }, [transactions])
+
+  const budgetHealth = useMemo(() => {
+    if (budgets.length === 0) return 'No Budgets'
+    const criticalCount = budgets.filter(b => (b.spent / b.amount) >= 1).length
+    const warningCount = budgets.filter(b => (b.spent / b.amount) >= 0.8 && (b.spent / b.amount) < 1).length
+
+    if (criticalCount > 0) return 'Critical'
+    if (warningCount > 0) return 'At Risk'
+    return 'Excellent'
+  }, [budgets])
+
+  // --- Chart Data Preparation ---
 
   const weeklySeries = useMemo(() => {
     const end = new Date()
@@ -157,6 +191,9 @@ const Dashboard = () => {
     const byKey = new Map<string, number>(days.map((d) => [format(d, 'yyyy-MM-dd'), 0]))
 
     for (const t of transactions) {
+      // Only include expenses in the chart
+      if (t.transaction_type === 'credit') continue
+
       const key = format(new Date(t.date), 'yyyy-MM-dd')
       if (!byKey.has(key)) continue
       byKey.set(key, (byKey.get(key) || 0) + Number(t.amount || 0))
@@ -175,6 +212,7 @@ const Dashboard = () => {
     const byKey = new Map<string, number>(months.map((d) => [format(d, 'yyyy-MM'), 0]))
 
     for (const t of transactions) {
+      if (t.transaction_type === 'credit') continue
       const key = format(new Date(t.date), 'yyyy-MM')
       if (!byKey.has(key)) continue
       byKey.set(key, (byKey.get(key) || 0) + Number(t.amount || 0))
@@ -194,10 +232,6 @@ const Dashboard = () => {
 
   const topCategories = (stats?.by_category || []).slice(0, 4)
   const maxCat = Math.max(...topCategories.map((c) => c.total), 1)
-
-  const estimatedNetWorth = 142_580.42
-  const estimatedSavings = 24_850.0
-  const budgetHealth = 'Excellent'
 
   const insightText = (() => {
     if (monthlyChange === null) return 'Upload more transactions to unlock smarter insights.'
@@ -225,10 +259,10 @@ const Dashboard = () => {
         <div className="flex items-center gap-6">
           <div className="text-right">
             <div className="text-[11px] font-extrabold tracking-[0.16em] text-[#b8a79c]">
-              ESTIMATED NET WORTH
+              NET BALANCE
             </div>
             <div className="text-2xl font-extrabold tracking-tight text-[#2b2521]">
-              {currency(estimatedNetWorth)}
+              {currency(netBalance)}
             </div>
           </div>
           <button
@@ -247,7 +281,7 @@ const Dashboard = () => {
           iconBg="bg-[#f4ebe6]"
           iconColor="text-[#cc735d]"
           title="Monthly Spending"
-          value={currency(monthlyTrend?.current || 0)}
+          value={currency(monthlyTrend)}
           pill={
             monthlyChange !== null
               ? { label: `${monthlyChange >= 0 ? '+' : '-'}${Math.abs(monthlyChange).toFixed(0)}% vs last month`, tone: 'good' }
@@ -258,9 +292,9 @@ const Dashboard = () => {
           icon={PiggyBank}
           iconBg="bg-blue-50"
           iconColor="text-blue-600"
-          title="Total Savings"
-          value={currency(estimatedSavings)}
-          pill={{ label: '+8.2%', tone: 'info' }}
+          title="Monthly Savings"
+          value={currency(monthlySavings)}
+          pill={{ label: 'Current Month', tone: 'info' }}
         />
         <StatCard
           icon={ShieldCheck}
@@ -268,6 +302,7 @@ const Dashboard = () => {
           iconColor="text-green-600"
           title="Budget Health"
           value={budgetHealth}
+          pill={budgetHealth !== 'Excellent' && budgetHealth !== 'No Budgets' ? { label: 'Action Needed', tone: 'info' } : undefined}
           menu
         />
       </div>

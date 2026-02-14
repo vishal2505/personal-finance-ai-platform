@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, AlertTriangle, Info, AlertOctagon } from 'lucide-react'
 import { format } from 'date-fns'
+import Card from '../components/Card'
+import clsx from 'clsx'
 
 interface Anomaly {
   transaction_id: number
@@ -55,120 +57,115 @@ const Anomalies = () => {
     }
   }
 
-  const getSeverityColor = (severity: string) => {
+  const getSeverityStyles = (severity: string) => {
     switch (severity) {
       case 'high':
-        return 'bg-red-100 text-red-800 border-red-300'
+        return {
+          bg: 'bg-red-50',
+          text: 'text-red-700',
+          icon: AlertOctagon,
+          iconColor: 'text-red-600'
+        }
       case 'medium':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-300'
+        return {
+          bg: 'bg-orange-50',
+          text: 'text-orange-700',
+          icon: AlertTriangle,
+          iconColor: 'text-orange-600'
+        }
       case 'low':
-        return 'bg-blue-100 text-blue-800 border-blue-300'
+        return {
+          bg: 'bg-blue-50',
+          text: 'text-blue-700',
+          icon: Info,
+          iconColor: 'text-blue-600'
+        }
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-300'
+        return {
+          bg: 'bg-gray-50',
+          text: 'text-gray-700',
+          icon: Info,
+          iconColor: 'text-gray-600'
+        }
     }
   }
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8">
-      <div className="mb-8 flex justify-between items-center">
+    <div className="p-8">
+      <div className="mb-8 flex items-end justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Anomalies</h1>
-          <p className="mt-2 text-sm text-gray-600">Unusual transactions detected by AI</p>
+          <h1 className="text-3xl font-extrabold tracking-tight text-[#2b2521]">Anomalies</h1>
+          <p className="mt-1 text-sm text-[#9a8678]">Unusual transactions detected by AI</p>
         </div>
-        <div className="flex items-center space-x-4">
-          <select
-            value={months}
-            onChange={(e) => setMonths(parseInt(e.target.value))}
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value={1}>Last Month</option>
-            <option value={3}>Last 3 Months</option>
-            <option value={6}>Last 6 Months</option>
-            <option value={12}>Last Year</option>
-          </select>
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <select
+              value={months}
+              onChange={(e) => setMonths(parseInt(e.target.value))}
+              className="appearance-none rounded-xl border-0 bg-[#fbf8f4] py-2 pl-4 pr-10 text-sm font-semibold text-[#2b2521] ring-1 ring-[#e8e4df] focus:ring-2 focus:ring-[#d07a63]"
+            >
+              <option value={1}>Last Month</option>
+              <option value={3}>Last 3 Months</option>
+              <option value={6}>Last 6 Months</option>
+              <option value={12}>Last Year</option>
+            </select>
+          </div>
           <button
             onClick={handleRecalculate}
             disabled={recalculating}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl bg-[#2b2521] px-4 py-2 text-sm font-bold text-white shadow-lg transition hover:bg-[#4a403a] disabled:opacity-50"
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${recalculating ? 'animate-spin' : ''}`} />
+            <RefreshCw className={clsx('h-4 w-4', recalculating && 'animate-spin')} />
             Recalculate
           </button>
         </div>
       </div>
 
       {loading ? (
-        <div className="text-center py-12">Loading anomalies...</div>
+        <div className="py-12 text-center text-sm font-semibold text-[#9a8678]">Loading anomalies...</div>
       ) : (
-        <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="grid grid-cols-1 gap-6">
           {anomalies.length === 0 ? (
-            <div className="p-6 text-center text-gray-500">
+            <Card className="py-12 text-center text-[#9a8678]">
               No anomalies detected. Your spending patterns look normal!
-            </div>
+            </Card>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Merchant
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Amount
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Category
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Reason
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Severity
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {anomalies.map((anomaly) => (
-                    <tr key={anomaly.transaction_id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {format(new Date(anomaly.transaction.date), 'MMM dd, yyyy')}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-gray-900">
-                          {anomaly.transaction.merchant}
+            anomalies.map((anomaly) => {
+              const style = getSeverityStyles(anomaly.severity)
+              const Icon = style.icon
+              return (
+                <Card key={anomaly.transaction_id} className="group transition hover:bg-white hover:shadow-lg">
+                  <div className="flex items-start gap-4">
+                    <div className={clsx('mt-1 grid h-10 w-10 shrink-0 place-items-center rounded-full', style.bg)}>
+                      <Icon className={clsx('h-5 w-5', style.iconColor)} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-3">
+                          <h3 className="font-extrabold text-[#2b2521]">{anomaly.transaction.merchant}</h3>
+                          <span className={clsx('rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide', style.bg, style.text)}>
+                            {anomaly.severity} Priority
+                          </span>
                         </div>
-                        {anomaly.transaction.description && (
-                          <div className="text-sm text-gray-500">
-                            {anomaly.transaction.description}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        ${anomaly.transaction.amount.toFixed(2)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                          {anomaly.transaction.category_name || 'Uncategorized'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        <div className="text-lg font-extrabold text-[#2b2521]">
+                          ${anomaly.transaction.amount.toFixed(2)}
+                        </div>
+                      </div>
+
+                      <div className="mt-1 flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-[#9a8678]">
+                        <span>{format(new Date(anomaly.transaction.date), 'MMM dd, yyyy')}</span>
+                        <span>•</span>
+                        <span>{anomaly.transaction.category_name || 'Uncategorized'}</span>
+                      </div>
+
+                      <p className="mt-3 text-sm leading-relaxed text-[#6f6158]">
                         {anomaly.reason}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full border ${getSeverityColor(anomaly.severity)}`}
-                        >
-                          {anomaly.severity}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+              )
+            })
           )}
         </div>
       )}
