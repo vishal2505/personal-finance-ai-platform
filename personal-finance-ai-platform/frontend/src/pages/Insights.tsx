@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-import { Lightbulb, TrendingDown, AlertTriangle, DollarSign } from 'lucide-react'
+import { Lightbulb, TrendingDown, TrendingUp, AlertTriangle, DollarSign } from 'lucide-react'
 import Card from '../components/Card'
 import clsx from 'clsx'
 
@@ -38,9 +38,11 @@ const Insights = () => {
   const getIcon = (type: string, data?: any) => {
     switch (type) {
       case 'trend':
-        return data?.change_percent > 0
-          ? <TrendingUp className="h-6 w-6 text-red-500" />
-          : <TrendingDown className="h-6 w-6 text-green-500" />
+        const change = Number(data?.change_percent)
+        if (!Number.isNaN(change) && change >= 0) {
+          return <TrendingUp className="h-6 w-6 text-green-500" />
+        }
+        return <TrendingDown className="h-6 w-6 text-red-500" />
       case 'category':
         return <DollarSign className="h-6 w-6 text-blue-500" />
       case 'budget':
