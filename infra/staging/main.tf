@@ -1,5 +1,8 @@
 locals {
-  name_prefix = "${var.project_name}-${var.env}"
+  name_prefix   = "${var.project_name}-${var.env}"
+  openai_secret = var.openai_secret_arn != "" ? [
+    { name = "OPENAI_API_KEY", valueFrom = var.openai_secret_arn }
+  ] : []
 }
 
 # -----------------------------
@@ -186,6 +189,21 @@ resource "aws_iam_role_policy_attachment" "task_exec_attach" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+resource "aws_iam_role_policy" "task_secrets_access" {
+  count = var.openai_secret_arn != "" ? 1 : 0
+  role  = aws_iam_role.task_execution_role.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = [var.openai_secret_arn]
+      }
+    ]
+  })
+}
+
 # CloudWatch logs
 resource "aws_cloudwatch_log_group" "app_lg" {
   name              = "/ecs/${local.name_prefix}"
@@ -216,7 +234,7 @@ resource "aws_ecs_task_definition" "app" {
         { name = "DB_PORT", value = "3306" },
         { name = "CORS_ORIGINS", value = var.cors_origins }
       ]
-      # NOTE: do NOT hardcode password; use Secrets Manager later when your backend needs it.
+      secrets = local.openai_secret
       logConfiguration = {
         logDriver = "awslogs"
         options = {

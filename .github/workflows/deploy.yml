@@ -68,8 +68,16 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
+          OPENAI_SECRET_ARN: ${{ secrets.OPENAI_SECRET_ARN }}
         run: |
           sed -i "s|^container_image = \".*\"|container_image = \"$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG\"|" infra/staging/terraform.tfvars
+          if [ -n "$OPENAI_SECRET_ARN" ]; then
+            if grep -q '^openai_secret_arn' infra/staging/terraform.tfvars; then
+              sed -i "s|^openai_secret_arn = \".*\"|openai_secret_arn = \"$OPENAI_SECRET_ARN\"|" infra/staging/terraform.tfvars
+            else
+              echo "openai_secret_arn = \"$OPENAI_SECRET_ARN\"" >> infra/staging/terraform.tfvars
+            fi
+          fi
 
       - name: Terraform init
         working-directory: infra/staging
