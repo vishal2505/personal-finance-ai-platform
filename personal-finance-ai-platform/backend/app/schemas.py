@@ -126,11 +126,13 @@ class CategoryStats(BaseModel):
 # Merchant Rule schemas
 class MerchantRuleCreate(BaseModel):
     merchant_pattern: str
+    match_type: str = "partial"
     category_id: int
 
 class MerchantRuleResponse(BaseModel):
     id: int
     merchant_pattern: str
+    match_type: str
     category_id: int
     category_name: Optional[str] = None
     is_active: bool
