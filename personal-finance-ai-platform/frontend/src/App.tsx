@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './contexts/AuthContext'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import TwoFactorAuth from './pages/TwoFactorAuth'
 import Dashboard from './pages/Dashboard'
 import LandingPage from './pages/LandingPage'
 import UploadStatement from './pages/UploadStatement'
@@ -16,11 +17,12 @@ import Layout from './components/Layout'
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
+    <Router>
+      <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/verify-2fa" element={<TwoFactorAuth />} />
           <Route path="/" element={<LandingPage />} />
           <Route
             path="/*"
@@ -36,15 +38,15 @@ function App() {
                     <Route path="/insights" element={<Insights />} />
                     <Route path="/anomalies" element={<Anomalies />} />
                     <Route path="/settings" element={<Settings />} />
-                    <Route path="*" element={<Navigate to="/" replace />} />
+                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
                   </Routes>
                 </Layout>
               </PrivateRoute>
             }
           />
         </Routes>
-      </Router>
-    </AuthProvider>
+      </AuthProvider>
+    </Router>
   )
 }
 

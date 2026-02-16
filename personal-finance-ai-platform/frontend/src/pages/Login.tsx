@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import SpendWiseLogo from '../components/SpendWiseLogo'
 import { KeyRound, Mail } from 'lucide-react'
@@ -10,8 +10,6 @@ const Login = () => {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
-  const navigate = useNavigate()
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -19,7 +17,6 @@ const Login = () => {
 
     try {
       await login(email, password)
-      navigate('/dashboard')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Login failed')
     } finally {
