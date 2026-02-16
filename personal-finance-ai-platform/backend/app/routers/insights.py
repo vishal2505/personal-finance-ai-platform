@@ -24,6 +24,9 @@ def generate_openai_insights(transactions_data: dict) -> List[InsightResponse]:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key or not api_key.strip():
         return []
+    # Skip placeholder/dummy keys
+    if api_key.strip().lower() in ("dummy", "your-key-here", "sk-xxx"):
+        return []
 
     monthly = transactions_data.get("monthly_trends") or []
     top_cat = transactions_data.get("top_category")
@@ -162,11 +165,58 @@ def _build_transactions_data(db: Session, user_id: int, months: int) -> tuple[li
         top_cat_name = max(category_totals, key=category_totals.get)
         top_category = {"name": top_cat_name, "amount": category_totals[top_cat_name]}
 
+    # Query anomaly-flagged transactions
+    anomaly_rows = db.execute(
+        text("""
+            SELECT t.id, t.date, t.amount, t.merchant, t.anomaly_score
+            FROM transactions t
+            WHERE t.user_id = :user_id AND t.is_anomaly = 1
+              AND t.date >= :start_date AND t.date <= :end_date
+            ORDER BY t.anomaly_score DESC
+            LIMIT 10
+        """),
+        {"user_id": user_id, "start_date": start_date, "end_date": end_date},
+    ).fetchall()
+
+    unusual_transactions = [
+        {"id": r[0], "date": str(r[1]), "amount": float(r[2]),
+         "merchant": r[3], "anomaly_score": float(r[4] or 0)}
+        for r in anomaly_rows
+    ]
+
+    # Query budgets vs actual spending to generate warnings
+    budget_rows = db.execute(
+        text("""
+            SELECT b.name, b.amount AS budget_amount, b.category_id,
+                   COALESCE(SUM(t.amount), 0) AS spent
+            FROM budgets b
+            LEFT JOIN transactions t ON t.category_id = b.category_id
+              AND t.user_id = b.user_id
+              AND t.date >= :start_date AND t.date <= :end_date
+            WHERE b.user_id = :user_id AND b.is_active = 1
+            GROUP BY b.id, b.name, b.amount, b.category_id
+        """),
+        {"user_id": user_id, "start_date": start_date, "end_date": end_date},
+    ).fetchall()
+
+    budget_warnings = []
+    for r in budget_rows:
+        budget_name, budget_amount, cat_id, spent = r[0], float(r[1]), r[2], float(r[3])
+        pct = (spent / budget_amount * 100) if budget_amount > 0 else 0
+        if pct >= 80:
+            budget_warnings.append({
+                "budget_name": budget_name,
+                "budget_amount": budget_amount,
+                "spent": spent,
+                "percent_used": round(pct, 1),
+                "message": f"You've used {pct:.0f}% of your {budget_name} budget (${spent:.2f} / ${budget_amount:.2f})."
+            })
+
     transactions_data = {
         "monthly_trends": monthly_trends_list,
         "top_category": top_category,
-        "unusual_transactions": [],
-        "budget_warnings": []
+        "unusual_transactions": unusual_transactions,
+        "budget_warnings": budget_warnings
     }
     return list(rows), transactions_data
 
