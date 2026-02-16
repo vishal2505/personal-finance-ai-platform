@@ -23,11 +23,8 @@ const Settings = () => {
   const [categories, setCategories] = useState<Category[]>([])
   const [merchantRules, setMerchantRules] = useState<MerchantRule[]>([])
   const [loading, setLoading] = useState(true)
-  const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [showRuleModal, setShowRuleModal] = useState(false)
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null)
   const [editingRule, setEditingRule] = useState<MerchantRule | null>(null)
-  const [categoryForm, setCategoryForm] = useState({ name: '', color: '#3B82F6', icon: '💰' })
   const [ruleForm, setRuleForm] = useState({ merchant_pattern: '', category_id: '' })
 
   useEffect(() => {
@@ -44,58 +41,6 @@ const Settings = () => {
       setMerchantRules(rulesRes.data)
     } catch (error) {
       console.error('Error fetching data:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleCategorySubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    try {
-      if (editingCategory) {
-        await axios.patch(`/api/categories/${editingCategory.id}`, categoryForm)
-      } else {
-        await axios.post('/api/categories', categoryForm)
-      }
-      setShowCategoryModal(false)
-      setEditingCategory(null)
-      setCategoryForm({ name: '', color: '#3B82F6', icon: '💰' })
-      fetchData()
-    } catch (error: any) {
-      alert(error.response?.data?.detail || 'Error saving category')
-    }
-  }
-
-  const handleSeedCategories = async () => {
-    if (!confirm('This will add default categories like Food, Transport, and Utilities. Continue?')) return
-
-    setLoading(true)
-    const defaults = [
-      { name: 'Food & Dining', color: '#ef4444', icon: '🍔', type: 'expense' },
-      { name: 'Transportation', color: '#f97316', icon: '🚗', type: 'expense' },
-      { name: 'Shopping', color: '#ec4899', icon: '🛍️', type: 'expense' },
-      { name: 'Housing', color: '#8b5cf6', icon: '🏠', type: 'expense' },
-      { name: 'Utilities', color: '#06b6d4', icon: '💡', type: 'expense' },
-      { name: 'Health', color: '#10b981', icon: '🏥', type: 'expense' },
-      { name: 'Entertainment', color: '#8b5cf6', icon: '🎬', type: 'expense' },
-      { name: 'Income', color: '#22c55e', icon: '💰', type: 'income' },
-      { name: 'Transfer', color: '#64748b', icon: '↔️', type: 'transfer' },
-    ]
-
-    try {
-      // Create categories sequentially to avoid race conditions or overload
-      for (const cat of defaults) {
-        try {
-          await axios.post('/api/categories', cat)
-        } catch (err) {
-          // Ignore duplicates silently
-        }
-      }
-      await fetchData()
-      alert('Default categories added!')
-    } catch (error) {
-      console.error('Error seeding categories:', error)
-      alert('Error adding default categories')
     } finally {
       setLoading(false)
     }
@@ -124,16 +69,6 @@ const Settings = () => {
     }
   }
 
-  const handleDeleteCategory = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this category?')) return
-    try {
-      await axios.delete(`/api/categories/${id}`)
-      fetchData()
-    } catch (error) {
-      console.error('Error deleting category:', error)
-    }
-  }
-
   const handleDeleteRule = async (id: number) => {
     if (!confirm('Are you sure you want to delete this rule?')) return
     try {
@@ -151,12 +86,6 @@ const Settings = () => {
     } catch (error) {
       console.error('Error toggling rule:', error)
     }
-  }
-
-  const openEditCategory = (category: Category) => {
-    setEditingCategory(category)
-    setCategoryForm({ name: category.name, color: category.color, icon: category.icon })
-    setShowCategoryModal(true)
   }
 
   const openEditRule = (rule: MerchantRule) => {
@@ -177,73 +106,6 @@ const Settings = () => {
       </div>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        {/* Categories Section */}
-        <section className="space-y-4">
-          <div className="flex items-center justify-between px-1">
-            <h2 className="text-xl font-extrabold text-[#2b2521]">Categories</h2>
-            <div className="flex gap-2">
-              <button
-                onClick={handleSeedCategories}
-                className="rounded-xl px-3 py-1.5 text-xs font-bold text-[#9a8678] hover:bg-[#f4ebe6] hover:text-[#2b2521] transition"
-              >
-                Seed Defaults
-              </button>
-              <button
-                onClick={() => {
-                  setEditingCategory(null)
-                  setCategoryForm({ name: '', color: '#3B82F6', icon: '💰' })
-                  setShowCategoryModal(true)
-                }}
-                className="flex items-center gap-1.5 rounded-xl bg-[#f4ebe6] px-3 py-1.5 text-xs font-bold text-[#cc735d] transition hover:bg-[#ebd5ce]"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Add New
-              </button>
-            </div>
-          </div>
-
-          <Card className="divide-y divide-[#f0ebe6] !p-0">
-            {categories.map((category) => (
-              <div
-                key={category.id}
-                className="flex items-center justify-between p-4 transition hover:bg-[#fbf8f4]"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="grid h-10 w-10 place-items-center rounded-xl bg-[#fbf8f4] text-xl">
-                    {category.icon}
-                  </div>
-                  <div>
-                    <div className="font-bold text-[#2b2521]">{category.name}</div>
-                    <div className="mt-1 flex items-center gap-1.5">
-                      <div
-                        className="h-2 w-2 rounded-full ring-1 ring-black/5"
-                        style={{ backgroundColor: category.color }}
-                      ></div>
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-[#9a8678]">
-                        Color
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => openEditCategory(category)}
-                    className="rounded-lg p-2 text-[#9a8678] transition hover:bg-black/5 hover:text-[#2b2521]"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteCategory(category.id)}
-                    className="rounded-lg p-2 text-[#9a8678] transition hover:bg-red-50 hover:text-red-600"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </Card>
-        </section>
-
         {/* Merchant Rules Section */}
         <section className="space-y-4">
           <div className="flex items-center justify-between px-1">
@@ -316,65 +178,7 @@ const Settings = () => {
         </section>
       </div>
 
-      {/* Category Modal */}
-      {showCategoryModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2b2521]/40 backdrop-blur-sm">
-          <Card className="w-full max-w-sm shadow-2xl">
-            <h3 className="mb-6 text-xl font-extrabold text-[#2b2521]">
-              {editingCategory ? 'Edit Category' : 'New Category'}
-            </h3>
-            <form onSubmit={handleCategorySubmit} className="space-y-4">
-              <div>
-                <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#b8a79c]">Name</label>
-                <input
-                  type="text"
-                  required
-                  value={categoryForm.name}
-                  onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
-                  className="w-full rounded-xl border-0 bg-[#fbf8f4] py-2.5 text-sm font-semibold text-[#2b2521] ring-1 ring-[#e8e4df] focus:ring-2 focus:ring-[#d07a63]"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#b8a79c]">Icon (Emoji)</label>
-                <input
-                  type="text"
-                  value={categoryForm.icon}
-                  onChange={(e) => setCategoryForm({ ...categoryForm, icon: e.target.value })}
-                  className="w-full rounded-xl border-0 bg-[#fbf8f4] py-2.5 text-sm font-semibold text-[#2b2521] ring-1 ring-[#e8e4df] focus:ring-2 focus:ring-[#d07a63]"
-                  placeholder="💰"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#b8a79c]">Color</label>
-                <input
-                  type="color"
-                  value={categoryForm.color}
-                  onChange={(e) => setCategoryForm({ ...categoryForm, color: e.target.value })}
-                  className="h-10 w-full cursor-pointer rounded-xl border-0 bg-[#fbf8f4] p-1 ring-1 ring-[#e8e4df]"
-                />
-              </div>
-              <div className="mt-8 flex justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCategoryModal(false)
-                    setEditingCategory(null)
-                  }}
-                  className="rounded-xl px-4 py-2 text-sm font-bold text-[#9a8678] hover:bg-black/5"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="rounded-xl bg-[#d07a63] px-6 py-2 text-sm font-bold text-white shadow-lg transition hover:bg-[#b85f4a]"
-                >
-                  Save
-                </button>
-              </div>
-            </form>
-          </Card>
-        </div>
-      )}
+
 
       {/* Rule Modal */}
       {showRuleModal && (

@@ -3,7 +3,7 @@ import axios from 'axios'
 import { format, subMonths } from 'date-fns'
 import { Search, Filter, Download } from 'lucide-react'
 import Card from '../components/Card'
-import clsx from 'clsx'
+
 
 interface Transaction {
   id: number

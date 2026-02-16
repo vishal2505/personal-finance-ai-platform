@@ -37,6 +37,34 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_user)
     
+    # Auto-seed default categories
+    from app.models import Category
+    
+    default_categories = [
+        {"name": "Food & Dining", "color": "#ef4444", "icon": "🍔", "type": "expense"},
+        {"name": "Transportation", "color": "#f97316", "icon": "🚗", "type": "expense"},
+        {"name": "Shopping", "color": "#ec4899", "icon": "🛍️", "type": "expense"},
+        {"name": "Housing", "color": "#8b5cf6", "icon": "🏠", "type": "expense"},
+        {"name": "Utilities", "color": "#06b6d4", "icon": "💡", "type": "expense"},
+        {"name": "Health", "color": "#10b981", "icon": "🏥", "type": "expense"},
+        {"name": "Entertainment", "color": "#8b5cf6", "icon": "🎬", "type": "expense"},
+        {"name": "Income", "color": "#22c55e", "icon": "💰", "type": "income"},
+        {"name": "Transfer", "color": "#64748b", "icon": "↔️", "type": "transfer"},
+    ]
+    
+    for cat_data in default_categories:
+        category = Category(
+            user_id=db_user.id,
+            name=cat_data["name"],
+            color=cat_data["color"],
+            icon=cat_data["icon"],
+            type=cat_data["type"],
+            is_system=False
+        )
+        db.add(category)
+    
+    db.commit()
+    
     return db_user
 
 @router.post("/login", response_model=Token)

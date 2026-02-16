@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { BarChart3, Target, Wallet } from 'lucide-react'
 import SpendWiseLogo from '../components/SpendWiseLogo'
