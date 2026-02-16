@@ -4,13 +4,14 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
-from app.schemas import UserCreate, UserResponse, Token
+from app.schemas import UserCreate, UserResponse, Token, TwoFactorVerify
 from app.auth import (
     get_password_hash,
     authenticate_user,
     create_access_token,
     get_user_by_email,
     get_current_user,
+    get_pending_2fa_user,
     ACCESS_TOKEN_EXPIRE_MINUTES
 )
 
@@ -48,11 +49,47 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    # Issue a temporary token with '2fa_pending' scope
+    # This token CANNOT be used to access protected routes (get_current_user will reject it)
+    access_token_expires = timedelta(minutes=5) # Short expiry for 2FA step
+    access_token = create_access_token(
+        data={"sub": user.email, "scopes": ["2fa_pending"]}, 
+        expires_delta=access_token_expires
+    )
+    return {
+        "access_token": access_token, 
+        "token_type": "bearer",
+        "status": "2fa_required"
+    }
+
+@router.post("/verify-2fa", response_model=Token)
+def verify_two_factor(
+    payload: TwoFactorVerify,
+    user: User = Depends(get_pending_2fa_user)
+):
+    """
+    Verifies the 2FA code. Requires a valid token with '2fa_pending' scope.
+    If valid, returns a full access token.
+    """
+    if payload.code != "123456":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid authentication code"
+        )
+        
+    # Issue the final access token with 'access' scope
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.email}, expires_delta=access_token_expires
+        data={"sub": user.email, "scopes": ["access"]},
+        expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    
+    return {
+        "access_token": access_token, 
+        "token_type": "bearer",
+        "status": "success"
+    }
 
 @router.get("/me", response_model=UserResponse)
 def get_current_user_info(current_user: User = Depends(get_current_user)):

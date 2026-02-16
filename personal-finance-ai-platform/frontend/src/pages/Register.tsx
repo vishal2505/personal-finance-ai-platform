@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import SpendWiseLogo from '../components/SpendWiseLogo'
 import { Mail, UserPlus } from 'lucide-react'
@@ -11,8 +11,6 @@ const Register = () => {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const { register } = useAuth()
-  const navigate = useNavigate()
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -20,7 +18,6 @@ const Register = () => {
 
     try {
       await register(email, password, fullName)
-      navigate('/dashboard')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Registration failed')
     } finally {
