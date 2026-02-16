@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-import { Plus, Trash2, Edit, Tag, ShoppingBag } from 'lucide-react'
+import { Plus, Trash2, Edit, Tag, ShoppingBag, Play } from 'lucide-react'
 import Card from '../components/Card'
 import clsx from 'clsx'
 
@@ -14,6 +14,7 @@ interface Category {
 interface MerchantRule {
   id: number
   merchant_pattern: string
+  match_type: 'exact' | 'partial'
   category_id: number
   category_name: string | null
   is_active: boolean
@@ -28,7 +29,8 @@ const Settings = () => {
   const [editingCategory, setEditingCategory] = useState<Category | null>(null)
   const [editingRule, setEditingRule] = useState<MerchantRule | null>(null)
   const [categoryForm, setCategoryForm] = useState({ name: '', color: '#3B82F6', icon: '💰' })
-  const [ruleForm, setRuleForm] = useState({ merchant_pattern: '', category_id: '' })
+  const [ruleForm, setRuleForm] = useState({ merchant_pattern: '', match_type: 'partial', category_id: '' })
+  const [selectedCategoryForRules, setSelectedCategoryForRules] = useState<string>('')
 
   useEffect(() => {
     fetchData()
@@ -66,38 +68,13 @@ const Settings = () => {
     }
   }
 
-  const handleSeedCategories = async () => {
-    if (!confirm('This will add default categories like Food, Transport, and Utilities. Continue?')) return
-
-    setLoading(true)
-    const defaults = [
-      { name: 'Food & Dining', color: '#ef4444', icon: '🍔', type: 'expense' },
-      { name: 'Transportation', color: '#f97316', icon: '🚗', type: 'expense' },
-      { name: 'Shopping', color: '#ec4899', icon: '🛍️', type: 'expense' },
-      { name: 'Housing', color: '#8b5cf6', icon: '🏠', type: 'expense' },
-      { name: 'Utilities', color: '#06b6d4', icon: '💡', type: 'expense' },
-      { name: 'Health', color: '#10b981', icon: '🏥', type: 'expense' },
-      { name: 'Entertainment', color: '#8b5cf6', icon: '🎬', type: 'expense' },
-      { name: 'Income', color: '#22c55e', icon: '💰', type: 'income' },
-      { name: 'Transfer', color: '#64748b', icon: '↔️', type: 'transfer' },
-    ]
-
+  const handleDeleteCategory = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this category?')) return
     try {
-      // Create categories sequentially to avoid race conditions or overload
-      for (const cat of defaults) {
-        try {
-          await axios.post('/api/categories', cat)
-        } catch (err) {
-          // Ignore duplicates silently
-        }
-      }
-      await fetchData()
-      alert('Default categories added!')
+      await axios.delete(`/api/categories/${id}`)
+      fetchData()
     } catch (error) {
-      console.error('Error seeding categories:', error)
-      alert('Error adding default categories')
-    } finally {
-      setLoading(false)
+      console.error('Error deleting category:', error)
     }
   }
 
@@ -107,30 +84,22 @@ const Settings = () => {
       if (editingRule) {
         await axios.put(`/api/settings/merchant-rules/${editingRule.id}`, {
           merchant_pattern: ruleForm.merchant_pattern,
+          match_type: ruleForm.match_type,
           category_id: parseInt(ruleForm.category_id)
         })
       } else {
         await axios.post('/api/settings/merchant-rules', {
           merchant_pattern: ruleForm.merchant_pattern,
+          match_type: ruleForm.match_type,
           category_id: parseInt(ruleForm.category_id)
         })
       }
       setShowRuleModal(false)
       setEditingRule(null)
-      setRuleForm({ merchant_pattern: '', category_id: '' })
+      setRuleForm({ merchant_pattern: '', match_type: 'partial', category_id: '' })
       fetchData()
     } catch (error: any) {
       alert(error.response?.data?.detail || 'Error saving rule')
-    }
-  }
-
-  const handleDeleteCategory = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this category?')) return
-    try {
-      await axios.delete(`/api/categories/${id}`)
-      fetchData()
-    } catch (error) {
-      console.error('Error deleting category:', error)
     }
   }
 
@@ -153,6 +122,21 @@ const Settings = () => {
     }
   }
 
+  const handleRunAutomation = async () => {
+    if (!confirm('Are you sure you want to run automation rules now?\n\nWARNING: This will re-categorize ALL matches in existing transactions. This action cannot be undone.')) {
+      return
+    }
+
+    try {
+      const response = await axios.post('/api/settings/run-automation')
+      alert(response.data.message)
+      // Redirect to import review if requested, or just stay here
+      window.location.href = '/import-review'
+    } catch (error: any) {
+      alert(error.response?.data?.detail || 'Error running automation')
+    }
+  }
+
   const openEditCategory = (category: Category) => {
     setEditingCategory(category)
     setCategoryForm({ name: category.name, color: category.color, icon: category.icon })
@@ -161,7 +145,11 @@ const Settings = () => {
 
   const openEditRule = (rule: MerchantRule) => {
     setEditingRule(rule)
-    setRuleForm({ merchant_pattern: rule.merchant_pattern, category_id: rule.category_id.toString() })
+    setRuleForm({
+      merchant_pattern: rule.merchant_pattern,
+      match_type: rule.match_type,
+      category_id: rule.category_id.toString()
+    })
     setShowRuleModal(true)
   }
 
@@ -181,25 +169,17 @@ const Settings = () => {
         <section className="space-y-4">
           <div className="flex items-center justify-between px-1">
             <h2 className="text-xl font-extrabold text-[#2b2521]">Categories</h2>
-            <div className="flex gap-2">
-              <button
-                onClick={handleSeedCategories}
-                className="rounded-xl px-3 py-1.5 text-xs font-bold text-[#9a8678] hover:bg-[#f4ebe6] hover:text-[#2b2521] transition"
-              >
-                Seed Defaults
-              </button>
-              <button
-                onClick={() => {
-                  setEditingCategory(null)
-                  setCategoryForm({ name: '', color: '#3B82F6', icon: '💰' })
-                  setShowCategoryModal(true)
-                }}
-                className="flex items-center gap-1.5 rounded-xl bg-[#f4ebe6] px-3 py-1.5 text-xs font-bold text-[#cc735d] transition hover:bg-[#ebd5ce]"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Add New
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                setEditingCategory(null)
+                setCategoryForm({ name: '', color: '#3B82F6', icon: '💰' })
+                setShowCategoryModal(true)
+              }}
+              className="flex items-center gap-1.5 rounded-xl bg-[#f4ebe6] px-3 py-1.5 text-xs font-bold text-[#cc735d] transition hover:bg-[#ebd5ce]"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add New
+            </button>
           </div>
 
           <Card className="divide-y divide-[#f0ebe6] !p-0">
@@ -246,75 +226,117 @@ const Settings = () => {
 
         {/* Merchant Rules Section */}
         <section className="space-y-4">
-          <div className="flex items-center justify-between px-1">
-            <h2 className="text-xl font-extrabold text-[#2b2521]">Automation Rules</h2>
-            <button
-              onClick={() => {
-                setEditingRule(null)
-                setRuleForm({ merchant_pattern: '', category_id: '' })
-                setShowRuleModal(true)
-              }}
-              className="flex items-center gap-1.5 rounded-xl bg-[#f4ebe6] px-3 py-1.5 text-xs font-bold text-[#cc735d] transition hover:bg-[#ebd5ce]"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Add New
-            </button>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between px-1">
+            <h2 className="text-xl font-extrabold text-[#2b2521]">Category Automation Rules</h2>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleRunAutomation}
+                className="flex items-center gap-1.5 rounded-xl bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600 transition hover:bg-blue-100"
+                title="Re-run rules on all existing transactions"
+              >
+                <Play className="h-3.5 w-3.5" />
+                Run Automation
+              </button>
+              <button
+                onClick={() => {
+                  setEditingRule(null)
+                  setRuleForm({ merchant_pattern: '', match_type: 'partial', category_id: selectedCategoryForRules || '' })
+                  setShowRuleModal(true)
+                }}
+                className="flex items-center gap-1.5 rounded-xl bg-[#f4ebe6] px-3 py-1.5 text-xs font-bold text-[#cc735d] transition hover:bg-[#ebd5ce]"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Rule
+              </button>
+            </div>
           </div>
 
-          <Card className="divide-y divide-[#f0ebe6] !p-0">
-            {merchantRules.length === 0 ? (
-              <div className="p-8 text-center text-sm text-[#9a8678]">
-                No rules yet. Add a rule to auto-categorize transactions.
-              </div>
-            ) : (
-              merchantRules.map((rule) => (
-                <div
-                  key={rule.id}
-                  className="flex items-center justify-between p-4 transition hover:bg-[#fbf8f4]"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="grid h-10 w-10 place-items-center rounded-xl bg-[#f4ebe6] text-[#cc735d]">
-                      <ShoppingBag className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <div className="font-bold text-[#2b2521]">{rule.merchant_pattern}</div>
-                      <div className="mt-0.5 flex items-center gap-1.5 text-xs font-medium text-[#9a8678]">
-                        <Tag className="h-3 w-3" />
-                        {rule.category_name || 'Unknown Category'}
+          <div className="flex flex-col gap-4">
+            {/* Category Filter */}
+            <select
+              value={selectedCategoryForRules}
+              onChange={(e) => setSelectedCategoryForRules(e.target.value)}
+              className="w-full appearance-none rounded-xl border-0 bg-white py-3 px-4 text-sm font-semibold text-[#2b2521] shadow-sm ring-1 ring-[#e8e4df] focus:ring-2 focus:ring-[#d07a63]"
+            >
+              <option value="">All Categories</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.icon} {cat.name}
+                </option>
+              ))}
+            </select>
+
+            <Card className="divide-y divide-[#f0ebe6] !p-0 max-h-[500px] overflow-y-auto">
+              {merchantRules
+                .filter(rule => !selectedCategoryForRules || rule.category_id.toString() === selectedCategoryForRules)
+                .length === 0 ? (
+                <div className="p-8 text-center text-sm text-[#9a8678]">
+                  {merchantRules.length === 0
+                    ? "No rules yet. Add a rule to auto-categorize transactions."
+                    : "No rules found for this category."}
+                </div>
+              ) : (
+                merchantRules
+                  .filter(rule => !selectedCategoryForRules || rule.category_id.toString() === selectedCategoryForRules)
+                  .map((rule) => (
+                    <div
+                      key={rule.id}
+                      className="flex items-center justify-between p-4 transition hover:bg-[#fbf8f4]"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="grid h-10 w-10 place-items-center rounded-xl bg-[#f4ebe6] text-[#cc735d]">
+                          <ShoppingBag className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-[#2b2521]">{rule.merchant_pattern}</span>
+                            <span className={clsx(
+                              "rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                              rule.match_type === 'exact' ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-600"
+                            )}>
+                              {rule.match_type || 'partial'}
+                            </span>
+                          </div>
+                          <div className="mt-0.5 flex items-center gap-1.5 text-xs font-medium text-[#9a8678]">
+                            <Tag className="h-3 w-3" />
+                            {rule.category_name || 'Unknown Category'}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleToggleRule(rule.id)}
+                          className={clsx(
+                            'rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-wide transition',
+                            rule.is_active
+                              ? 'bg-green-50 text-green-700'
+                              : 'bg-gray-100 text-gray-600'
+                          )}
+                        >
+                          {rule.is_active ? 'Active' : 'Paused'}
+                        </button>
+                        <button
+                          onClick={() => openEditRule(rule)}
+                          className="rounded-lg p-2 text-[#9a8678] transition hover:bg-black/5 hover:text-[#2b2521]"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteRule(rule.id)}
+                          className="rounded-lg p-2 text-[#9a8678] transition hover:bg-red-50 hover:text-red-600"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleToggleRule(rule.id)}
-                      className={clsx(
-                        'rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-wide transition',
-                        rule.is_active
-                          ? 'bg-green-50 text-green-700'
-                          : 'bg-gray-100 text-gray-600'
-                      )}
-                    >
-                      {rule.is_active ? 'Active' : 'Paused'}
-                    </button>
-                    <button
-                      onClick={() => openEditRule(rule)}
-                      className="rounded-lg p-2 text-[#9a8678] transition hover:bg-black/5 hover:text-[#2b2521]"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteRule(rule.id)}
-                      className="rounded-lg p-2 text-[#9a8678] transition hover:bg-red-50 hover:text-red-600"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </Card>
+                  ))
+              )}
+            </Card>
+          </div>
         </section>
       </div>
+
+
 
       {/* Category Modal */}
       {showCategoryModal && (
@@ -399,6 +421,41 @@ const Settings = () => {
                 </p>
               </div>
               <div>
+                <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#b8a79c]">Matching Logic</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRuleForm({ ...ruleForm, match_type: 'partial' })}
+                    className={clsx(
+                      "flex-1 rounded-xl border py-2 text-sm font-bold transition",
+                      ruleForm.match_type === 'partial'
+                        ? "border-[#d07a63] bg-[#f4ebe6] text-[#d07a63]"
+                        : "border-[#e8e4df] bg-white text-[#9a8678] hover:bg-[#fbf8f4]"
+                    )}
+                  >
+                    Partial Match
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRuleForm({ ...ruleForm, match_type: 'exact' })}
+                    className={clsx(
+                      "flex-1 rounded-xl border py-2 text-sm font-bold transition",
+                      ruleForm.match_type === 'exact'
+                        ? "border-[#d07a63] bg-[#f4ebe6] text-[#d07a63]"
+                        : "border-[#e8e4df] bg-white text-[#9a8678] hover:bg-[#fbf8f4]"
+                    )}
+                  >
+                    Exact Match
+                  </button>
+                </div>
+                <p className="mt-1.5 text-xs text-[#9a8678]">
+                  {ruleForm.match_type === 'partial'
+                    ? "Matches if merchant name contains this text (e.g. 'Starbucks' matches 'Starbucks on Main')"
+                    : "Matches only if merchant name is exactly this text"}
+                </p>
+              </div>
+
+              <div>
                 <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#b8a79c]">Category</label>
                 <select
                   required
@@ -409,7 +466,7 @@ const Settings = () => {
                   <option value="">Select category...</option>
                   {categories.map((cat) => (
                     <option key={cat.id} value={cat.id}>
-                      {cat.name}
+                      {cat.icon} {cat.name}
                     </option>
                   ))}
                 </select>

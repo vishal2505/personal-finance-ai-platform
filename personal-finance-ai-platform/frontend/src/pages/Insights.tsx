@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-import { Lightbulb, TrendingUp, TrendingDown, AlertTriangle, ArrowRight, DollarSign } from 'lucide-react'
+import { Lightbulb, TrendingDown, AlertTriangle, DollarSign } from 'lucide-react'
 import Card from '../components/Card'
 import clsx from 'clsx'
-import { format } from 'date-fns'
 
 interface Insight {
   type: string

@@ -135,38 +135,12 @@ def auto_categorize_transaction(merchant: str, db: Session, user_id: int) -> int
     ).all()
     
     for rule in rules:
-        if rule.merchant_pattern.lower() in merchant.lower():
-            return rule.category_id
-    
-    # Default categories based on keywords
-    merchant_lower = merchant.lower()
-    
-    # Food & Dining
-    if any(kw in merchant_lower for kw in ['restaurant', 'cafe', 'food', 'dining', 'starbucks', 'mcdonald']):
-        category = db.query(Category).filter(
-            Category.user_id == user_id,
-            Category.name.ilike('%food%')
-        ).first()
-        if category:
-            return category.id
-    
-    # Transportation
-    if any(kw in merchant_lower for kw in ['grab', 'uber', 'taxi', 'transport', 'mrt', 'bus']):
-        category = db.query(Category).filter(
-            Category.user_id == user_id,
-            Category.name.ilike('%transport%')
-        ).first()
-        if category:
-            return category.id
-    
-    # Shopping
-    if any(kw in merchant_lower for kw in ['shop', 'store', 'retail', 'amazon', 'lazada']):
-        category = db.query(Category).filter(
-            Category.user_id == user_id,
-            Category.name.ilike('%shopping%')
-        ).first()
-        if category:
-            return category.id
+        if rule.match_type == 'exact':
+            if rule.merchant_pattern.lower() == merchant.lower():
+                return rule.category_id
+        else:  # partial match (default)
+            if rule.merchant_pattern.lower() in merchant.lower():
+                return rule.category_id
     
     return None
 

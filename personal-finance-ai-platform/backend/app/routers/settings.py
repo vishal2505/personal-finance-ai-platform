@@ -101,6 +101,7 @@ def create_merchant_rule(
     db_rule = MerchantRule(
         user_id=current_user.id,
         merchant_pattern=rule.merchant_pattern,
+        match_type=rule.match_type,
         category_id=rule.category_id
     )
     db.add(db_rule)
@@ -110,6 +111,7 @@ def create_merchant_rule(
     return MerchantRuleResponse(
         id=db_rule.id,
         merchant_pattern=db_rule.merchant_pattern,
+        match_type=db_rule.match_type,
         category_id=db_rule.category_id,
         category_name=category.name,
         is_active=db_rule.is_active
@@ -124,9 +126,10 @@ def get_merchant_rules(
     
     result = []
     for rule in rules:
-        result.append(MerchantRuleResponse(
+            result.append(MerchantRuleResponse(
             id=rule.id,
             merchant_pattern=rule.merchant_pattern,
+            match_type=rule.match_type,
             category_id=rule.category_id,
             category_name=rule.category.name if rule.category else None,
             is_active=rule.is_active
@@ -157,6 +160,7 @@ def update_merchant_rule(
         raise HTTPException(status_code=404, detail="Category not found")
     
     rule.merchant_pattern = rule_update.merchant_pattern
+    rule.match_type = rule_update.match_type
     rule.category_id = rule_update.category_id
     
     db.commit()
@@ -165,6 +169,7 @@ def update_merchant_rule(
     return MerchantRuleResponse(
         id=rule.id,
         merchant_pattern=rule.merchant_pattern,
+        match_type=rule.match_type,
         category_id=rule.category_id,
         category_name=category.name,
         is_active=rule.is_active
@@ -204,3 +209,27 @@ def toggle_merchant_rule(
     db.commit()
     
     return {"message": f"Merchant rule {'activated' if rule.is_active else 'deactivated'}"}
+
+@router.post("/run-automation")
+def run_automation_rules(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Run automation rules on all existing transactions"""
+    from app.routers.imports import auto_categorize_transaction
+    from app.models import Transaction
+    
+    # Fetch all transactions
+    transactions = db.query(Transaction).filter(Transaction.user_id == current_user.id).all()
+    count = 0
+    
+    for transaction in transactions:
+        new_category_id = auto_categorize_transaction(transaction.merchant, db, current_user.id)
+        
+        # Only update if category changed (and isn't None)
+        if new_category_id is not None and transaction.category_id != new_category_id:
+            transaction.category_id = new_category_id
+            count += 1
+            
+    db.commit()
+    return {"message": f"Automation rules applied. {count} transactions updated."}
