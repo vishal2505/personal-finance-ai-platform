@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36" version="29.3.8" pages="4">
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36" scale="1" border="0" version="29.3.8" pages="4">
   <diagram name="Logical Architecture" id="BTzVLsMf8-i0JhFEbA95">
-    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+    <mxGraphModel dx="1213" dy="749" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -111,7 +111,7 @@
     </mxGraphModel>
   </diagram>
   <diagram id="8r80lMTwk267gghEJvD5" name="Infrastructure Architecture">
-    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+    <mxGraphModel dx="1639" dy="882" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -137,6 +137,9 @@
         </mxCell>
         <mxCell id="iSvVc9b1dKV3kt1V8CCY-8" edge="1" parent="1" source="2g20gH6zUOuFJSVxbZzu-15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=-0.004;entryY=0.636;entryDx=0;entryDy=0;entryPerimeter=0;" target="2g20gH6zUOuFJSVxbZzu-11">
           <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="183" y="314" />
+            </Array>
             <mxPoint x="210" y="310" as="sourcePoint" />
             <mxPoint x="340" y="410" as="targetPoint" />
           </mxGeometry>
@@ -171,10 +174,10 @@
           </mxGeometry>
         </mxCell>
         <mxCell id="2g20gH6zUOuFJSVxbZzu-7" parent="1" style="image;aspect=fixed;perimeter=ellipsePerimeter;html=1;align=center;shadow=0;dashed=0;spacingTop=3;image=img/lib/active_directory/database_partition_2.svg;" value="" vertex="1">
-          <mxGeometry height="103.6" width="140" x="990" y="256.4" as="geometry" />
+          <mxGeometry height="103.6" width="140" x="778.72" y="248.2" as="geometry" />
         </mxCell>
         <mxCell id="2g20gH6zUOuFJSVxbZzu-9" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;span style=&quot;background-color: rgb(236, 236, 236);&quot;&gt;RDBMS - MySQL&lt;/span&gt;&lt;div style=&quot;background-color: rgb(236, 236, 236);&quot;&gt;(&lt;span style=&quot;background-color: transparent;&quot;&gt;Finance data, AI Outputs&lt;/span&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;)&lt;/span&gt;&lt;/div&gt;" vertex="1">
-          <mxGeometry height="30" width="190" x="965" y="360" as="geometry" />
+          <mxGeometry height="30" width="190" x="750" y="230" as="geometry" />
         </mxCell>
         <mxCell id="2g20gH6zUOuFJSVxbZzu-13" edge="1" parent="1" source="2g20gH6zUOuFJSVxbZzu-11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="iSvVc9b1dKV3kt1V8CCY-10">
           <mxGeometry relative="1" as="geometry" />
@@ -475,7 +478,7 @@
     </mxGraphModel>
   </diagram>
   <diagram name="Sequence Diagram - 2" id="xS2RPhnbzQ5idxBQ5ua8">
-    <mxGraphModel dx="1861" dy="624" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="E5sZCveQOjyFkitsTeh7-0" />
         <mxCell id="E5sZCveQOjyFkitsTeh7-1" parent="E5sZCveQOjyFkitsTeh7-0" />
