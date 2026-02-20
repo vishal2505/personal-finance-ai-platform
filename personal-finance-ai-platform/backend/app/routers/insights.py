@@ -72,6 +72,7 @@ Example: [{{"type":"tip","title":"Save on subscriptions","description":"You have
                     title=str(item["title"])[:200],
                     description=str(item["description"])[:500],
                     data=item.get("data") if isinstance(item.get("data"), dict) else None,
+                    source="ai",
                 ))
         return insights
     except Exception:

@@ -175,6 +175,7 @@ class InsightResponse(BaseModel):
     title: str
     description: str
     data: Optional[dict] = None
+    source: str = "rule"  # "rule" or "ai"
 
 # Anomaly schemas
 class AnomalyResponse(BaseModel):
