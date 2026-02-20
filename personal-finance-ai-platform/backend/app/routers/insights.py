@@ -25,6 +25,14 @@ def generate_openai_insights(transactions_data: dict) -> List[InsightResponse]:
     Returns empty list if OPENAI_API_KEY is missing or the API call fails.
     """
     api_key = os.getenv("OPENAI_API_KEY")
+    # Handle JSON-wrapped secrets from AWS Secrets Manager
+    if api_key and api_key.strip().startswith("{"):
+        try:
+            parsed_key = json.loads(api_key)
+            api_key = parsed_key.get("OPENAI_API_KEY") or next(iter(parsed_key.values()), "")
+            logger.info("Extracted OpenAI key from JSON secret")
+        except (json.JSONDecodeError, StopIteration):
+            pass
     logger.info("OpenAI key present: %s, starts with: %s", bool(api_key and api_key.strip()), (api_key or "")[:10])
     if not api_key or not api_key.strip():
         logger.warning("OPENAI_API_KEY is missing or empty")
