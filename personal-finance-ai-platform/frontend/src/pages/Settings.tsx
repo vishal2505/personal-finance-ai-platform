@@ -57,7 +57,7 @@ const Settings = () => {
       if (editingCategory) {
         await axios.patch(`/api/categories/${editingCategory.id}`, categoryForm)
       } else {
-        await axios.post('/api/categories', categoryForm)
+        await axios.post('/api/categories/', categoryForm)
       }
       setShowCategoryModal(false)
       setEditingCategory(null)
