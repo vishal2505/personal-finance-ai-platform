@@ -2,6 +2,7 @@ from typing import List
 from datetime import datetime, timedelta
 import json
 import os
+import logging
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, text
@@ -13,6 +14,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
@@ -22,10 +25,13 @@ def generate_openai_insights(transactions_data: dict) -> List[InsightResponse]:
     Returns empty list if OPENAI_API_KEY is missing or the API call fails.
     """
     api_key = os.getenv("OPENAI_API_KEY")
+    logger.info("OpenAI key present: %s, starts with: %s", bool(api_key and api_key.strip()), (api_key or "")[:10])
     if not api_key or not api_key.strip():
+        logger.warning("OPENAI_API_KEY is missing or empty")
         return []
     # Skip placeholder/dummy keys
     if api_key.strip().lower() in ("dummy", "your-key-here", "sk-xxx"):
+        logger.warning("OPENAI_API_KEY is a placeholder value")
         return []
 
     monthly = transactions_data.get("monthly_trends") or []
@@ -75,7 +81,8 @@ Example: [{{"type":"tip","title":"Save on subscriptions","description":"You have
                     source="ai",
                 ))
         return insights
-    except Exception:
+    except Exception as e:
+        logger.error("OpenAI insights failed: %s", str(e))
         return []
 
 def generate_ai_insight(transactions_data: dict) -> List[InsightResponse]:
