@@ -78,7 +78,7 @@ const Insights = () => {
 
   const renderCard = (insight: Insight, index: number) => (
     <Card
-      key={index}
+      key={`${insight.source ?? 'rule'}-${insight.type}-${insight.title}`}
       className={clsx(
         'flex flex-col justify-between transition hover:shadow-lg',
         insight.source === 'ai' && 'ring-1 ring-purple-200'
