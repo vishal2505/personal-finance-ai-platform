@@ -502,45 +502,12 @@ def auto_categorize_transaction(merchant: str, db: Session, user_id: int) -> Opt
     ).all()
     
     for rule in rules:
-        if rule.merchant_pattern.lower() in merchant_cleaned:
-            return rule.category_id
-    
-    # 3. OPTIMIZATION: Fetch all categories once instead of multiple queries
-    categories = db.query(Category).filter(
-        Category.user_id == user_id
-    ).all()
-    
-    # Create a lookup map for efficient category matching by name
-    category_lookup = {cat.name.lower(): cat.id for cat in categories}
-    
-    # DICTIONARY MAP: Keyword-to-category mapping for pattern matching
-    category_keywords = {
-        'food': ['restaurant', 'cafe', 'food', 'dining', 'starbucks', 'mcdonald', 'pizza', 'burger', 'sushi', 'bakery', 'donut', 'fast food', 'bistro', 'diner', 'grill', 'bbq', 'ramen', 'noodle', 'chicken', 'seafood', 'dessert', 'ice cream', 'coffee', 'tea', 'juice', 'smoothie', 'kopitiam', 'hawker', 'chicken rice', 'laksa', 'satay', 'dim sum', 'yum cha', 'toast box', 'jollibbee', 'chir chir', 'mcspicy'],
-        'transportation': ['grab', 'uber', 'taxi', 'transport', 'mrt', 'bus', 'parking', 'gas', 'fuel', 'carpark', 'petrol', 'lyft', 'train', 'flight', 'airline', 'tolls', 'metro', 'transit', 'uber eats', 'smrt', 'lrt', 'ets', 'gojek'],
-        'shopping': ['shop', 'store', 'retail', 'amazon', 'lazada', 'mall', 'supermarket', 'mart', 'clothing', 'department', 'shopee', 'aliexpress', 'ebay', 'target', 'walmart', 'costco', 'cold storage', 'ntuc', 'giant', 'carrefour', 'courts', 'best denki', 'challenger'],
-        'entertainment': ['movie', 'cinema', 'theatre', 'game', 'spotify', 'netflix', 'streaming', 'arcade', 'karaoke', 'disney', 'hulu', 'youtube', 'twitch', 'steam', 'playstation', 'xbox', 'concert', 'tickets', 'gv', 'shaw', 'cathay', 'golden village', 'bugis plus'],
-        'utilities': ['electric', 'water', 'internet', 'phone', 'utility', 'bills', 'subscription', 'isp', 'telecom', 'energy', 'power', 'broadband', 'wifi', 'singtel', 'starhub', 'm1', 'sp group'],
-        'healthcare': ['hospital', 'clinic', 'pharmacy', 'doctor', 'medical', 'health', 'dentist', 'therapist', 'optician', 'veterinary', 'wellness', 'gym', 'fitness', 'raffles', 'parkway', 'gleneagles', 'mount elizabeth', 'guardian', 'watsons'],
-        'accommodation': ['hotel', 'airbnb', 'resort', 'hostel', 'motel', 'booking', 'accommodation', 'lodging', 'rent', 'apartment', 'village hotel', 'furama', 'swissotel'],
-        'fitness': ['gym', 'yoga', 'fitness', 'sport', 'trainer', 'exercise', 'workout', 'swimming', 'tennis', 'cycling', 'f45', 'orangetheory', 'virgin active', 'year round'],
-        'education': ['school', 'university', 'college', 'course', 'learning', 'tuition', 'education', 'class', 'training', 'udemy', 'nus', 'ntu', 'smu', 'iss'],
-        'insurance': ['insurance', 'premium', 'axa', 'allianz', 'claim', 'ntuc income', 'great eastern', 'aviva', 'oic'],
-        'financial': ['bank', 'atm', 'transfer', 'wire', 'loan', 'mortgage', 'investment', 'brokerage', 'crypto', 'forex', 'dbs', 'ocbc', 'uob', 'maybank', 'cimb', 'ib', 'saxo'],
-        'personal_care': ['salon', 'barber', 'spa', 'massage', 'cosmetics', 'beauty', 'haircut', 'nails', 'grooming', 'hair lab', 'la klinik', 'esthetic'],
-        'gifts_donations': ['gift', 'flowers', 'charity', 'donation', 'donate', 'flower chimp'],
-        'office_supplies': ['office', 'stationery', 'supply', 'supplies', 'paper', 'pen', 'ink', 'popular', 'g1000'],
-        'home_maintenance': ['hardware', 'home depot', 'lowes', 'plumber', 'electrician', 'maintenance', 'repair', 'renovation', 'home improvement', 'bestmart', 'kaison'],
-        'pets': ['pet', 'veterinary', 'vet', 'dog', 'cat', 'petmart', 'pet store', 'only pet', 'pet lovers'],
-        'childcare': ['daycare', 'babysitter', 'nanny', 'childcare'],
-    }
-    
-    # Match merchant against keyword map
-    for category_keyword, keywords in category_keywords.items():
-        if any(kw in merchant_cleaned for kw in keywords):
-            # Search for matching category in lookup
-            for cat_name, cat_id in category_lookup.items():
-                if category_keyword in cat_name:
-                    return cat_id
+        if rule.match_type == 'exact':
+            if rule.merchant_pattern.lower() == merchant.lower():
+                return rule.category_id
+        else:  # partial match (default)
+            if rule.merchant_pattern.lower() in merchant.lower():
+                return rule.category_id
     
     return None
 

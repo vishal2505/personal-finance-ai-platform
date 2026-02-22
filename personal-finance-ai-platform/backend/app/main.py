@@ -14,7 +14,7 @@ app = FastAPI(title="Personal Finance AI Platform", version="1.0.0")
 from app.auth import get_password_hash, get_user_by_email
 from app.models import User
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.database import SessionLocal, get_db
 
 def seed_test_user():
     db: Session = SessionLocal()

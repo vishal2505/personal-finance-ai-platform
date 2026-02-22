@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, Calendar, Target } from 'lucide-react'
 import { format } from 'date-fns'
+import Card from '../components/Card'
+import clsx from 'clsx'
 
 interface Budget {
   id: number
@@ -101,170 +103,182 @@ const Budgets = () => {
 
   const getProgressColor = (spent: number, amount: number) => {
     const percentage = (spent / amount) * 100
-    if (percentage >= 100) return 'bg-red-600'
-    if (percentage >= 80) return 'bg-yellow-600'
-    return 'bg-green-600'
+    if (percentage >= 100) return 'bg-red-500'
+    if (percentage >= 80) return 'bg-orange-500'
+    return 'bg-green-500' // Using brand-aligned green/orange/red
   }
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8">
-      <div className="mb-8 flex justify-between items-center">
+    <div className="p-8">
+      <div className="mb-8 flex items-end justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Budgets</h1>
-          <p className="mt-2 text-sm text-gray-600">Track your spending against budgets</p>
+          <h1 className="text-3xl font-extrabold tracking-tight text-[#2b2521]">Budgets</h1>
+          <p className="mt-1 text-sm text-[#9a8678]">Track your spending against budgets</p>
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+          className="flex items-center gap-2 rounded-xl bg-[#2b2521] px-4 py-2 text-sm font-bold text-white shadow-xl transition hover:bg-[#4a403a]"
         >
-          <Plus className="h-4 w-4 mr-2" />
+          <Plus className="h-4 w-4" />
           New Budget
         </button>
       </div>
 
       {loading ? (
-        <div className="text-center py-12">Loading...</div>
+        <div className="py-12 text-center text-sm font-semibold text-[#9a8678]">Loading budgets...</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {budgets.length === 0 ? (
-            <div className="col-span-full text-center py-12 text-gray-500">
+            <div className="col-span-full py-12 text-center text-[#9a8678]">
               No budgets created yet. Create your first budget to get started.
             </div>
           ) : (
             budgets.map((budget) => (
-              <div key={budget.id} className="bg-white shadow rounded-lg p-6">
-                <div className="flex justify-between items-start mb-4">
+              <Card key={budget.id} className="group relative overflow-hidden transition hover:ring-[#d07a63]/20">
+                <div className="relative z-10 flex items-start justify-between">
                   <div>
-                    <h3 className="text-lg font-medium text-gray-900">{budget.name}</h3>
-                    <p className="text-sm text-gray-500">
+                    <div className="flex items-center gap-2">
+                      <Target className="h-4 w-4 text-[#cc735d]" />
+                      <h3 className="font-extrabold text-[#2b2521]">{budget.name}</h3>
+                    </div>
+                    <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-[#9a8678]">
                       {budget.category_name || 'Overall'} • {budget.period}
                     </p>
                   </div>
                   <button
                     onClick={() => handleDelete(budget.id)}
-                    className="text-red-600 hover:text-red-800"
+                    className="rounded-lg p-1.5 text-[#9a8678] transition hover:bg-red-50 hover:text-red-600"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
 
-                <div className="mb-4">
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="text-gray-600">Spent</span>
-                    <span className="font-medium">
-                      ${budget.spent.toFixed(2)} / ${budget.amount.toFixed(2)}
-                    </span>
+                <div className="mt-6">
+                  <div className="mb-2 flex items-end justify-between">
+                    <div>
+                      <div className="text-2xl font-extrabold text-[#2b2521]">
+                        ${budget.spent.toFixed(2)}
+                      </div>
+                      <div className="text-xs font-medium text-[#9a8678]">
+                        of ${budget.amount.toFixed(2)} limit
+                      </div>
+                    </div>
+                    <div className="text-xs font-bold text-[#b8a79c]">
+                      {((budget.spent / budget.amount) * 100).toFixed(1)}%
+                    </div>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-[#f4ebe6]">
                     <div
-                      className={`h-2 rounded-full ${getProgressColor(budget.spent, budget.amount)}`}
+                      className={clsx('h-full transition-all duration-500', getProgressColor(budget.spent, budget.amount))}
                       style={{ width: `${getProgressPercentage(budget.spent, budget.amount)}%` }}
-                    ></div>
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    {((budget.spent / budget.amount) * 100).toFixed(1)}% used
+                    />
                   </div>
                 </div>
 
-                <div className="text-xs text-gray-500">
-                  {format(new Date(budget.start_date), 'MMM dd, yyyy')}
-                  {budget.end_date && ` - ${format(new Date(budget.end_date), 'MMM dd, yyyy')}`}
+                <div className="mt-4 flex items-center gap-2 text-xs font-medium text-[#9a8678]">
+                  <Calendar className="h-3.5 w-3.5" />
+                  {format(new Date(budget.start_date), 'MMM dd')}
+                  {budget.end_date && ` - ${format(new Date(budget.end_date), 'MMM dd')}`}
                 </div>
-              </div>
+              </Card>
             ))
           )}
         </div>
       )}
 
       {showModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <h3 className="text-lg font-bold text-gray-900 mb-4">Create New Budget</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2b2521]/40 backdrop-blur-sm">
+          <Card className="w-full max-w-md shadow-2xl">
+            <h3 className="mb-6 text-xl font-extrabold text-[#2b2521]">Create New Budget</h3>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Name</label>
+                <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#b8a79c]">Name</label>
                 <input
                   type="text"
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                  className="w-full rounded-xl border-0 bg-[#fbf8f4] py-2.5 text-sm font-semibold text-[#2b2521] ring-1 ring-[#e8e4df] focus:ring-2 focus:ring-[#d07a63]"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Amount</label>
+                <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#b8a79c]">Amount</label>
                 <input
                   type="number"
                   step="0.01"
                   required
                   value={formData.amount}
                   onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                  className="w-full rounded-xl border-0 bg-[#fbf8f4] py-2.5 text-sm font-semibold text-[#2b2521] ring-1 ring-[#e8e4df] focus:ring-2 focus:ring-[#d07a63]"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Period</label>
-                <select
-                  value={formData.period}
-                  onChange={(e) => setFormData({ ...formData, period: e.target.value })}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                >
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="yearly">Yearly</option>
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#b8a79c]">Period</label>
+                  <select
+                    value={formData.period}
+                    onChange={(e) => setFormData({ ...formData, period: e.target.value })}
+                    className="w-full appearance-none rounded-xl border-0 bg-[#fbf8f4] py-2.5 px-3 text-sm font-semibold text-[#2b2521] ring-1 ring-[#e8e4df] focus:ring-2 focus:ring-[#d07a63]"
+                  >
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#b8a79c]">Category</label>
+                  <select
+                    value={formData.category_id}
+                    onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
+                    className="w-full appearance-none rounded-xl border-0 bg-[#fbf8f4] py-2.5 px-3 text-sm font-semibold text-[#2b2521] ring-1 ring-[#e8e4df] focus:ring-2 focus:ring-[#d07a63]"
+                  >
+                    <option value="">Overall</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Category (optional)</label>
-                <select
-                  value={formData.category_id}
-                  onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                >
-                  <option value="">Overall Budget</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#b8a79c]">Start Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={formData.start_date}
+                    onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                    className="w-full rounded-xl border-0 bg-[#fbf8f4] py-2.5 text-sm font-semibold text-[#2b2521] ring-1 ring-[#e8e4df] focus:ring-2 focus:ring-[#d07a63]"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-[#b8a79c]">End Date</label>
+                  <input
+                    type="date"
+                    value={formData.end_date}
+                    onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                    className="w-full rounded-xl border-0 bg-[#fbf8f4] py-2.5 text-sm font-semibold text-[#2b2521] ring-1 ring-[#e8e4df] focus:ring-2 focus:ring-[#d07a63]"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Start Date</label>
-                <input
-                  type="date"
-                  required
-                  value={formData.start_date}
-                  onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">End Date (optional)</label>
-                <input
-                  type="date"
-                  value={formData.end_date}
-                  onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                />
-              </div>
-              <div className="flex justify-end space-x-3">
+              <div className="mt-8 flex justify-end gap-3 pt-4">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  className="rounded-xl px-4 py-2 text-sm font-bold text-[#9a8678] hover:bg-black/5"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+                  className="rounded-xl bg-[#d07a63] px-6 py-2 text-sm font-bold text-white shadow-lg transition hover:bg-[#b85f4a]"
                 >
-                  Create
+                  Create Budget
                 </button>
               </div>
             </form>
-          </div>
+          </Card>
         </div>
       )}
     </div>

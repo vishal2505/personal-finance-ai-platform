@@ -21,9 +21,14 @@ class UserResponse(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    status: Optional[str] = "success"  # "success" or "2fa_required"
 
 class TokenData(BaseModel):
     email: Optional[str] = None
+    scopes: List[str] = []
+
+class TwoFactorVerify(BaseModel):
+    code: str
 
 # Transaction schemas
 class TransactionCreate(BaseModel):
@@ -126,11 +131,13 @@ class CategoryStats(BaseModel):
 # Merchant Rule schemas
 class MerchantRuleCreate(BaseModel):
     merchant_pattern: str
+    match_type: str = "partial"
     category_id: int
 
 class MerchantRuleResponse(BaseModel):
     id: int
     merchant_pattern: str
+    match_type: str
     category_id: int
     category_name: Optional[str] = None
     is_active: bool
@@ -168,6 +175,7 @@ class InsightResponse(BaseModel):
     title: str
     description: str
     data: Optional[dict] = None
+    source: str = "rule"  # "rule" or "ai"
 
 # Anomaly schemas
 class AnomalyResponse(BaseModel):

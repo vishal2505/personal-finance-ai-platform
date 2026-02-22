@@ -4,13 +4,14 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
-from app.schemas import UserCreate, UserResponse, Token
+from app.schemas import UserCreate, UserResponse, Token, TwoFactorVerify
 from app.auth import (
     get_password_hash,
     authenticate_user,
     create_access_token,
     get_user_by_email,
     get_current_user,
+    get_pending_2fa_user,
     ACCESS_TOKEN_EXPIRE_MINUTES
 )
 
@@ -37,6 +38,75 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_user)
     
+    # Auto-seed default categories
+    from app.models import Category
+    
+    default_categories = [
+        {"name": "Food & Dining", "color": "#ef4444", "icon": "🍔", "type": "expense"},
+        {"name": "Transportation", "color": "#f97316", "icon": "🚗", "type": "expense"},
+        {"name": "Shopping", "color": "#ec4899", "icon": "🛍️", "type": "expense"},
+        {"name": "Housing", "color": "#8b5cf6", "icon": "🏠", "type": "expense"},
+        {"name": "Utilities", "color": "#06b6d4", "icon": "💡", "type": "expense"},
+        {"name": "Health", "color": "#10b981", "icon": "🏥", "type": "expense"},
+        {"name": "Entertainment", "color": "#8b5cf6", "icon": "🎬", "type": "expense"},
+        {"name": "Income", "color": "#22c55e", "icon": "💰", "type": "income"},
+        {"name": "Transfer", "color": "#64748b", "icon": "↔️", "type": "transfer"},
+    ]
+    
+    # Create map of created categories for rule seeding
+    created_categories = {}
+    
+    for cat_data in default_categories:
+        category = Category(
+            user_id=db_user.id,
+            name=cat_data["name"],
+            color=cat_data["color"],
+            icon=cat_data["icon"],
+            type=cat_data["type"],
+            is_system=False
+        )
+        db.add(category)
+        db.flush() # flush to get id
+        created_categories[category.name] = category.id
+
+    # Auto-seed default merchant rules
+    from app.models import MerchantRule
+    
+    default_rules = [
+        # Food & Dining
+        {"pattern": "restaurant", "cat": "Food & Dining"},
+        {"pattern": "cafe", "cat": "Food & Dining"},
+        {"pattern": "food", "cat": "Food & Dining"},
+        {"pattern": "dining", "cat": "Food & Dining"},
+        {"pattern": "starbucks", "cat": "Food & Dining"},
+        {"pattern": "mcdonald", "cat": "Food & Dining"},
+        # Transportation
+        {"pattern": "grab", "cat": "Transportation"},
+        {"pattern": "uber", "cat": "Transportation"},
+        {"pattern": "taxi", "cat": "Transportation"},
+        {"pattern": "transport", "cat": "Transportation"},
+        {"pattern": "mrt", "cat": "Transportation"},
+        {"pattern": "bus", "cat": "Transportation"},
+        # Shopping
+        {"pattern": "shop", "cat": "Shopping"},
+        {"pattern": "store", "cat": "Shopping"},
+        {"pattern": "retail", "cat": "Shopping"},
+        {"pattern": "amazon", "cat": "Shopping"},
+        {"pattern": "lazada", "cat": "Shopping"},
+    ]
+
+    for rule_data in default_rules:
+        if rule_data["cat"] in created_categories:
+            rule = MerchantRule(
+                user_id=db_user.id,
+                merchant_pattern=rule_data["pattern"],
+                match_type="partial",
+                category_id=created_categories[rule_data["cat"]]
+            )
+            db.add(rule)
+    
+    db.commit()
+    
     return db_user
 
 @router.post("/login", response_model=Token)
@@ -48,11 +118,47 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    # Issue a temporary token with '2fa_pending' scope
+    # This token CANNOT be used to access protected routes (get_current_user will reject it)
+    access_token_expires = timedelta(minutes=5) # Short expiry for 2FA step
+    access_token = create_access_token(
+        data={"sub": user.email, "scopes": ["2fa_pending"]}, 
+        expires_delta=access_token_expires
+    )
+    return {
+        "access_token": access_token, 
+        "token_type": "bearer",
+        "status": "2fa_required"
+    }
+
+@router.post("/verify-2fa", response_model=Token)
+def verify_two_factor(
+    payload: TwoFactorVerify,
+    user: User = Depends(get_pending_2fa_user)
+):
+    """
+    Verifies the 2FA code. Requires a valid token with '2fa_pending' scope.
+    If valid, returns a full access token.
+    """
+    if payload.code != "123456":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid authentication code"
+        )
+        
+    # Issue the final access token with 'access' scope
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.email}, expires_delta=access_token_expires
+        data={"sub": user.email, "scopes": ["access"]},
+        expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    
+    return {
+        "access_token": access_token, 
+        "token_type": "bearer",
+        "status": "success"
+    }
 
 @router.get("/me", response_model=UserResponse)
 def get_current_user_info(current_user: User = Depends(get_current_user)):

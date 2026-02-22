@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import AuthShell from '../components/AuthShell'
+import SpendWiseLogo from '../components/SpendWiseLogo'
 import { KeyRound, Mail } from 'lucide-react'
 
 const Login = () => {
@@ -10,8 +10,6 @@ const Login = () => {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
-  const navigate = useNavigate()
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -19,7 +17,6 @@ const Login = () => {
 
     try {
       await login(email, password)
-      navigate('/')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Login failed')
     } finally {
@@ -28,86 +25,130 @@ const Login = () => {
   }
 
   return (
-    <AuthShell>
-      <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-[#f4eee8] text-[#cc735d] ring-1 ring-black/5">
-        <KeyRound className="h-6 w-6" />
-      </div>
-
-      <div className="text-center">
-        <h1 className="text-4xl font-extrabold tracking-tight text-[#2b2521]">Welcome Back</h1>
-        <p className="mt-2 text-sm text-[#9a8678]">Sign in to manage your AI-driven finances.</p>
-      </div>
-
-      <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
-        {error && (
-          <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-800 ring-1 ring-red-200">
-            {error}
-          </div>
-        )}
-
-        <div className="space-y-2">
-          <label htmlFor="email" className="text-sm font-semibold text-[#4b3d34]">
-            Email
-          </label>
-          <div className="relative">
-            <Mail className="pointer-events-none absolute left-5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#b8a79c]" />
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              className="w-full rounded-full bg-[#f7f3ef] py-3 pl-12 pr-5 text-sm text-[#2b2521] placeholder:text-[#b8a79c] ring-1 ring-black/5 transition focus:outline-none focus:ring-2 focus:ring-[#d07a63]/30"
-              placeholder="name@company.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <label htmlFor="password" className="text-sm font-semibold text-[#4b3d34]">
-            Password
-          </label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            className="w-full rounded-full bg-[#f7f3ef] px-5 py-3 text-sm text-[#2b2521] placeholder:text-[#b8a79c] ring-1 ring-black/5 transition focus:outline-none focus:ring-2 focus:ring-[#d07a63]/30"
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+    <div className="flex min-h-screen w-full bg-[#fbf8f4]">
+      {/* Left Side: Design & Branding */}
+      <div className="relative hidden w-1/2 flex-col bg-[#2b2521] p-12 text-white lg:flex">
+        <div className="absolute inset-0 z-0 overflow-hidden">
+          <img
+            src="https://images.unsplash.com/photo-1633158829585-23ba8f7c8caf?auto=format&fit=crop&q=80"
+            alt="Abstract background"
+            className="h-full w-full object-cover opacity-40 mix-blend-overlay"
           />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#2b2521] via-transparent to-transparent" />
         </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="mt-2 w-full rounded-full bg-[#d07a63] px-6 py-3 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(208,122,99,0.35)] transition hover:bg-[#c96f58] focus:outline-none focus:ring-2 focus:ring-[#d07a63]/40 disabled:opacity-60"
-        >
-          {loading ? 'Signing in...' : 'Sign In'}
-        </button>
-
-        <div className="pt-2 text-center text-sm">
-          <button
-            type="button"
-            onClick={() => setError('Password reset is not implemented yet.')}
-            className="font-semibold text-[#cc735d] hover:text-[#b85f4a]"
-          >
-            Forgot Password?
-          </button>
+        <div className="relative z-10 text-white">
+          <SpendWiseLogo light />
         </div>
 
-        <div className="text-center text-sm text-[#9a8678]">
-          Don&apos;t have an account?{' '}
-          <Link to="/register" className="font-semibold text-[#cc735d] hover:text-[#b85f4a]">
-            Sign Up
-          </Link>
+        <div className="relative z-10 mt-auto">
+          <blockquote className="space-y-4">
+            <p className="text-xl font-medium leading-relaxed">
+              &ldquo;SpendWise has completely transformed how I manage my finances. The AI insights are incredibly accurate and saved me hours of manual work.&rdquo;
+            </p>
+            <footer className="flex items-center gap-4">
+              <div className="h-10 w-10 overflow-hidden rounded-full border-2 border-white/20">
+                <img
+                  src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=100"
+                  alt="User"
+                  className="h-full w-full object-cover"
+                />
+              </div>
+              <div className="text-sm">
+                <div className="font-semibold text-white">Sofia Davis</div>
+                <div className="text-white/60">Product Designer</div>
+              </div>
+            </footer>
+          </blockquote>
         </div>
-      </form>
-    </AuthShell>
+      </div>
+
+      {/* Right Side: Form */}
+      <div className="flex w-full flex-col items-center justify-center p-8 lg:w-1/2">
+        <div className="w-full max-w-md space-y-8">
+          <div className="text-center">
+            <h1 className="text-3xl font-extrabold tracking-tight text-[#2b2521]">Welcome Back</h1>
+            <p className="mt-2 text-sm text-[#6f6158]">
+              Sign in to manage your AI-driven finances.
+            </p>
+          </div>
+
+          <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+            {error && (
+              <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-800 ring-1 ring-red-200">
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label htmlFor="email" className="text-sm font-semibold text-[#4b3d34]">
+                  Email
+                </label>
+                <div className="relative">
+                  <Mail className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#b8a79c]" />
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    className="w-full rounded-2xl border-0 bg-white py-4 pl-12 pr-4 text-[#2b2521] ring-1 ring-[#e8e4df] placeholder:text-[#b8a79c] focus:ring-2 focus:ring-[#d07a63] sm:text-sm sm:leading-6"
+                    placeholder="name@company.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="password" className="text-sm font-semibold text-[#4b3d34]">
+                    Password
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setError('Password reset is not implemented yet.')}
+                    className="text-sm font-semibold text-[#d07a63] hover:text-[#b85f4a]"
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
+                <div className="relative">
+                  <KeyRound className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#b8a79c]" />
+                  <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                    className="w-full rounded-2xl border-0 bg-white py-4 pl-12 pr-4 text-[#2b2521] ring-1 ring-[#e8e4df] placeholder:text-[#b8a79c] focus:ring-2 focus:ring-[#d07a63] sm:text-sm sm:leading-6"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex w-full justify-center rounded-2xl bg-[#d07a63] py-4 text-sm font-semibold text-white shadow-xl transition hover:bg-[#c96f58] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d07a63] disabled:opacity-50"
+            >
+              {loading ? 'Signing in...' : 'Sign In'}
+            </button>
+
+            <p className="text-center text-sm text-[#6f6158]">
+              Don&apos;t have an account?{' '}
+              <Link to="/register" className="font-semibold text-[#d07a63] hover:text-[#b85f4a]">
+                Sign up for free
+              </Link>
+            </p>
+          </form>
+        </div>
+      </div>
+    </div>
   )
 }
 

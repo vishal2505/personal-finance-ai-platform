@@ -275,6 +275,28 @@ def bulk_update_transactions(
     db.commit()
     return {"updated": len(transactions)}
 
+@router.post("/bulk-delete")
+def bulk_delete_transactions(
+    bulk_update: TransactionBulkUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    transactions = db.query(Transaction).filter(
+        and_(
+            Transaction.id.in_(bulk_update.transaction_ids),
+            Transaction.user_id == current_user.id
+        )
+    ).all()
+
+    if not transactions:
+        raise HTTPException(status_code=404, detail="No transactions found")
+
+    count = len(transactions)
+    for transaction in transactions:
+        db.delete(transaction)
+    db.commit()
+    return {"deleted": count}
+
 @router.delete("/{transaction_id}")
 def delete_transaction(
     transaction_id: int,

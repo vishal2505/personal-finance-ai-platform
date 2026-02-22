@@ -2,6 +2,7 @@ from typing import List
 from datetime import datetime, timedelta
 import json
 import os
+import logging
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, text
@@ -13,6 +14,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
@@ -22,7 +25,21 @@ def generate_openai_insights(transactions_data: dict) -> List[InsightResponse]:
     Returns empty list if OPENAI_API_KEY is missing or the API call fails.
     """
     api_key = os.getenv("OPENAI_API_KEY")
+    # Handle JSON-wrapped secrets from AWS Secrets Manager
+    if api_key and api_key.strip().startswith("{"):
+        try:
+            parsed_key = json.loads(api_key)
+            api_key = parsed_key.get("OPENAI_API_KEY") or next(iter(parsed_key.values()), "")
+            logger.info("Extracted OpenAI key from JSON secret")
+        except (json.JSONDecodeError, StopIteration):
+            pass
+    logger.info("OpenAI key present: %s, starts with: %s", bool(api_key and api_key.strip()), (api_key or "")[:10])
     if not api_key or not api_key.strip():
+        logger.warning("OPENAI_API_KEY is missing or empty")
+        return []
+    # Skip placeholder/dummy keys
+    if api_key.strip().lower() in ("dummy", "your-key-here", "sk-xxx"):
+        logger.warning("OPENAI_API_KEY is a placeholder value")
         return []
 
     monthly = transactions_data.get("monthly_trends") or []
@@ -69,9 +86,11 @@ Example: [{{"type":"tip","title":"Save on subscriptions","description":"You have
                     title=str(item["title"])[:200],
                     description=str(item["description"])[:500],
                     data=item.get("data") if isinstance(item.get("data"), dict) else None,
+                    source="ai",
                 ))
         return insights
-    except Exception:
+    except Exception as e:
+        logger.error("OpenAI insights failed: %s", str(e))
         return []
 
 def generate_ai_insight(transactions_data: dict) -> List[InsightResponse]:
@@ -162,11 +181,58 @@ def _build_transactions_data(db: Session, user_id: int, months: int) -> tuple[li
         top_cat_name = max(category_totals, key=category_totals.get)
         top_category = {"name": top_cat_name, "amount": category_totals[top_cat_name]}
 
+    # Query anomaly-flagged transactions
+    anomaly_rows = db.execute(
+        text("""
+            SELECT t.id, t.date, t.amount, t.merchant, t.anomaly_score
+            FROM transactions t
+            WHERE t.user_id = :user_id AND t.is_anomaly = 1
+              AND t.date >= :start_date AND t.date <= :end_date
+            ORDER BY t.anomaly_score DESC
+            LIMIT 10
+        """),
+        {"user_id": user_id, "start_date": start_date, "end_date": end_date},
+    ).fetchall()
+
+    unusual_transactions = [
+        {"id": r[0], "date": str(r[1]), "amount": float(r[2]),
+         "merchant": r[3], "anomaly_score": float(r[4] or 0)}
+        for r in anomaly_rows
+    ]
+
+    # Query budgets vs actual spending to generate warnings
+    budget_rows = db.execute(
+        text("""
+            SELECT b.name, b.amount AS budget_amount, b.category_id,
+                   COALESCE(SUM(t.amount), 0) AS spent
+            FROM budgets b
+            LEFT JOIN transactions t ON t.category_id = b.category_id
+              AND t.user_id = b.user_id
+              AND t.date >= :start_date AND t.date <= :end_date
+            WHERE b.user_id = :user_id AND b.is_active = 1
+            GROUP BY b.id, b.name, b.amount, b.category_id
+        """),
+        {"user_id": user_id, "start_date": start_date, "end_date": end_date},
+    ).fetchall()
+
+    budget_warnings = []
+    for r in budget_rows:
+        budget_name, budget_amount, cat_id, spent = r[0], float(r[1]), r[2], float(r[3])
+        pct = (spent / budget_amount * 100) if budget_amount > 0 else 0
+        if pct >= 80:
+            budget_warnings.append({
+                "budget_name": budget_name,
+                "budget_amount": budget_amount,
+                "spent": spent,
+                "percent_used": round(pct, 1),
+                "message": f"You've used {pct:.0f}% of your {budget_name} budget (${spent:.2f} / ${budget_amount:.2f})."
+            })
+
     transactions_data = {
         "monthly_trends": monthly_trends_list,
         "top_category": top_category,
-        "unusual_transactions": [],
-        "budget_warnings": []
+        "unusual_transactions": unusual_transactions,
+        "budget_warnings": budget_warnings
     }
     return list(rows), transactions_data
 

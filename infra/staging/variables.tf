@@ -55,3 +55,9 @@ variable "db_instance_class" {
   type    = string
   default = "db.t3.micro"
 }
+
+variable "openai_secret_arn" {
+  type        = string
+  description = "Secrets Manager ARN that stores OPENAI_API_KEY"
+  default     = ""
+}

@@ -5,7 +5,7 @@ type SpendWiseLogoProps = {
   className?: string
 }
 
-const SpendWiseLogo = ({ compact = false, className }: SpendWiseLogoProps) => {
+const SpendWiseLogo = ({ compact = false, className, light = false }: SpendWiseLogoProps & { light?: boolean }) => {
   return (
     <div className={clsx('flex items-center gap-3 select-none', className)}>
       <div className="grid h-10 w-10 place-items-center rounded-2xl bg-[#d07a63] shadow-[0_12px_30px_rgba(208,122,99,0.35)]">
@@ -27,8 +27,12 @@ const SpendWiseLogo = ({ compact = false, className }: SpendWiseLogoProps) => {
 
       {!compact && (
         <div className="leading-tight">
-          <div className="text-lg font-extrabold tracking-tight text-[#2b2521]">SpendWise</div>
-          <div className="text-xs font-medium tracking-wide text-[#a08f85]">Personal finance</div>
+          <div className={clsx('text-lg font-extrabold tracking-tight', light ? 'text-white' : 'text-[#2b2521]')}>
+            SpendWise
+          </div>
+          <div className={clsx('text-xs font-medium tracking-wide', light ? 'text-[#dccac0]' : 'text-[#a08f85]')}>
+            Personal finance
+          </div>
         </div>
       )}
     </div>
