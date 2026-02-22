@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git fetch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git pull:*)",
+      "Bash(docker compose up:*)",
+      "Bash(docker compose exec:*)"
+    ]
+  }
+}
