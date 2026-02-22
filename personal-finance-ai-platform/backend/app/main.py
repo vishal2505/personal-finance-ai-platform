@@ -3,9 +3,85 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
 from app.routers import auth, transactions, budgets, insights, anomalies, imports, settings, accounts, upload, categories
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
+
+
+def ensure_schema_up_to_date():
+    """Add missing columns to existing tables so the ORM model matches the DB.
+
+    ``create_all`` only creates *new* tables – it never ALTERs existing ones.
+    This function inspects every table that SQLAlchemy knows about and adds
+    any columns that are present in the model but absent from the database.
+    """
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+
+    # --- categories ----------------------------------------------------------
+    if "categories" in existing_tables:
+        cols = {c["name"] for c in inspector.get_columns("categories")}
+
+        alters: list[str] = []
+        if "type" not in cols:
+            alters.append(
+                "ALTER TABLE categories ADD COLUMN `type` "
+                "ENUM('expense','income','transfer') NOT NULL DEFAULT 'expense'"
+            )
+        if "parent_id" not in cols:
+            alters.append(
+                "ALTER TABLE categories ADD COLUMN parent_id INTEGER NULL"
+            )
+        if "sort_order" not in cols:
+            alters.append(
+                "ALTER TABLE categories ADD COLUMN sort_order INTEGER DEFAULT 0"
+            )
+        if "is_system" not in cols:
+            alters.append(
+                "ALTER TABLE categories ADD COLUMN is_system BOOLEAN DEFAULT FALSE"
+            )
+        if "is_active" not in cols:
+            alters.append(
+                "ALTER TABLE categories ADD COLUMN is_active BOOLEAN DEFAULT TRUE"
+            )
+        if "is_hidden" not in cols:
+            alters.append(
+                "ALTER TABLE categories ADD COLUMN is_hidden BOOLEAN DEFAULT FALSE"
+            )
+        if "updated_at" not in cols:
+            alters.append(
+                "ALTER TABLE categories ADD COLUMN updated_at DATETIME NULL"
+            )
+
+        if alters:
+            with engine.begin() as conn:
+                for stmt in alters:
+                    logger.info("Auto-migration: %s", stmt)
+                    conn.execute(text(stmt))
+
+    # --- merchant_rules ------------------------------------------------------
+    if "merchant_rules" in existing_tables:
+        cols = {c["name"] for c in inspector.get_columns("merchant_rules")}
+
+        if "match_type" not in cols:
+            with engine.begin() as conn:
+                stmt = (
+                    "ALTER TABLE merchant_rules ADD COLUMN match_type "
+                    "VARCHAR(20) DEFAULT 'partial'"
+                )
+                logger.info("Auto-migration: %s", stmt)
+                conn.execute(text(stmt))
+
+
+try:
+    ensure_schema_up_to_date()
+except Exception:
+    logger.exception("Auto-migration failed – the app will start anyway")
 
 
 app = FastAPI(title="Personal Finance AI Platform", version="1.0.0")

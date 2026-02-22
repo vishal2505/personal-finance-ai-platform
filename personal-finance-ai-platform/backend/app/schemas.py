@@ -98,18 +98,18 @@ class CategoryUpdate(BaseModel):
 class CategoryResponse(BaseModel):
     id: int
     name: str
-    color: str
-    icon: str
-    type: str
-    parent_id: Optional[int]
-    sort_order: int
-    is_system: bool
-    is_active: bool
-    is_hidden: bool
-    created_at: datetime
-    updated_at: Optional[datetime]
-    user_id: Optional[int]
-    
+    color: str = "#3B82F6"
+    icon: str = "💰"
+    type: str = "expense"
+    parent_id: Optional[int] = None
+    sort_order: int = 0
+    is_system: bool = False
+    is_active: bool = True
+    is_hidden: bool = False
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    user_id: Optional[int] = None
+
     class Config:
         from_attributes = True
 
