@@ -77,6 +77,7 @@ class TransactionBulkUpdate(BaseModel):
     status: Optional[TransactionStatus] = None
 
 # Category schemas
+## Copilot recommendation => Validation: Add constraints to sort_order (e.g., conint(ge=0)) to prevent negative ordering values
 class CategoryBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     color: Optional[str] = Field(default="#3B82F6", pattern="^#[0-9A-Fa-f]{6}$")
@@ -146,6 +147,7 @@ class MerchantRuleResponse(BaseModel):
         from_attributes = True
 
 # Budget schemas
+## Copilot recommendation => Date validation: Add a validator to ensure end_date >= start_date
 class BudgetCreate(BaseModel):
     name: str
     amount: float
@@ -170,6 +172,7 @@ class BudgetResponse(BaseModel):
         from_attributes = True
 
 # Insights schemas
+## Copilot recommendation => InsightResponse: source is "rule" or "ai" — better as an enum for strictness
 class InsightResponse(BaseModel):
     type: str
     title: str
@@ -204,6 +207,8 @@ class AccountResponse(BaseModel):
         from_attributes = True
 
 # Import Job schemas
+## Copilot recommendation => Status field: Should be an enum (pending, processing, completed, failed) instead of free-form string
+## Copilot recommendation => Error message: Consider defaulting to "" instead of None for consistency in API responses
 class ImportJobResponse(BaseModel):
     id: int
     filename: str
