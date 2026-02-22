@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh pr create:*)",
+      "Bash(git reset:*)",
+      "Bash(git cherry-pick:*)"
+    ]
+  }
+}

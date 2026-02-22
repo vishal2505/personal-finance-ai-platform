@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { format, subMonths } from 'date-fns'
-import { Search, Filter, Download } from 'lucide-react'
+import { Search, Filter, Download, Trash2 } from 'lucide-react'
 import Card from '../components/Card'
 
 
@@ -21,6 +21,7 @@ const Transactions = () => {
   const [categories, setCategories] = useState<Array<{ id: number; name: string }>>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>('')
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [filters, setFilters] = useState({
     startDate: format(subMonths(new Date(), 12), 'yyyy-MM-dd'),
     endDate: format(new Date(), 'yyyy-MM-dd'),
@@ -74,6 +75,48 @@ const Transactions = () => {
       setTransactions([])
     } finally {
       setLoading(false)
+    }
+  }
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === transactions.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(transactions.map((t) => t.id)))
+    }
+  }
+
+  const deleteTransaction = async (id: number) => {
+    if (!window.confirm('Are you sure you want to delete this transaction?')) return
+    try {
+      await axios.delete(`/api/transactions/${id}`)
+      setTransactions((prev) => prev.filter((t) => t.id !== id))
+      setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next })
+    } catch (err: any) {
+      console.error('Error deleting transaction:', err)
+      setError(err.response?.data?.detail || 'Failed to delete transaction')
+    }
+  }
+
+  const bulkDeleteTransactions = async () => {
+    if (selectedIds.size === 0) return
+    if (!window.confirm(`Are you sure you want to delete ${selectedIds.size} transaction${selectedIds.size > 1 ? 's' : ''}?`)) return
+    try {
+      await axios.post('/api/transactions/bulk-delete', { transaction_ids: Array.from(selectedIds) })
+      setTransactions((prev) => prev.filter((t) => !selectedIds.has(t.id)))
+      setSelectedIds(new Set())
+    } catch (err: any) {
+      console.error('Error deleting transactions:', err)
+      setError(err.response?.data?.detail || 'Failed to delete transactions')
     }
   }
 
@@ -157,27 +200,58 @@ const Transactions = () => {
           <div className="py-12 text-center text-sm font-semibold text-[#9a8678]">Loading transactions...</div>
         ) : (
           <Card className="overflow-hidden !p-0">
+            {selectedIds.size > 0 && (
+              <div className="flex items-center gap-3 border-b border-[#f0ebe6] bg-red-50 px-6 py-3">
+                <span className="text-sm font-semibold text-[#2b2521]">
+                  {selectedIds.size} selected
+                </span>
+                <button
+                  onClick={bulkDeleteTransactions}
+                  className="flex items-center gap-1.5 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-red-600"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete Selected
+                </button>
+              </div>
+            )}
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">
                 <thead className="bg-[#fbf8f4]">
                   <tr>
+                    <th className="w-12 px-6 py-4">
+                      <input
+                        type="checkbox"
+                        checked={transactions.length > 0 && selectedIds.size === transactions.length}
+                        onChange={toggleSelectAll}
+                        className="h-4 w-4 rounded border-[#e8e4df] text-[#d07a63] focus:ring-[#d07a63]"
+                      />
+                    </th>
                     <th className="px-6 py-4 font-extrabold text-[#9a8678]">Date</th>
                     <th className="px-6 py-4 font-extrabold text-[#9a8678]">Merchant</th>
                     <th className="px-6 py-4 font-extrabold text-[#9a8678]">Category</th>
                     <th className="px-6 py-4 font-extrabold text-[#9a8678]">Amount</th>
                     <th className="px-6 py-4 font-extrabold text-[#9a8678]">Bank</th>
+                    <th className="px-6 py-4 font-extrabold text-[#9a8678]"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#f0ebe6]">
                   {transactions.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center text-[#9a8678]">
+                      <td colSpan={7} className="px-6 py-12 text-center text-[#9a8678]">
                         No transactions found
                       </td>
                     </tr>
                   ) : (
                     transactions.map((transaction) => (
-                      <tr key={transaction.id} className="group transition hover:bg-[#fbf8f4]">
+                      <tr key={transaction.id} className={`group transition hover:bg-[#fbf8f4] ${selectedIds.has(transaction.id) ? 'bg-[#fbf8f4]' : ''}`}>
+                        <td className="px-6 py-4">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(transaction.id)}
+                            onChange={() => toggleSelect(transaction.id)}
+                            className="h-4 w-4 rounded border-[#e8e4df] text-[#d07a63] focus:ring-[#d07a63]"
+                          />
+                        </td>
                         <td className="whitespace-nowrap px-6 py-4 font-medium text-[#6f6158]">
                           {format(new Date(transaction.date), 'MMM dd, yyyy')}
                         </td>
@@ -197,6 +271,15 @@ const Transactions = () => {
                         </td>
                         <td className="whitespace-nowrap px-6 py-4 text-[#9a8678]">
                           {transaction.bank_name || '-'}
+                        </td>
+                        <td className="whitespace-nowrap px-6 py-4">
+                          <button
+                            onClick={() => deleteTransaction(transaction.id)}
+                            className="rounded-lg p-1.5 text-[#b8a79c] transition hover:bg-red-50 hover:text-red-500"
+                            title="Delete transaction"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         </td>
                       </tr>
                     ))
