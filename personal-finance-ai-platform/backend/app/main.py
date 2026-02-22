@@ -147,3 +147,5 @@ def root():
 @app.get("/api/health")
 def health_check():
     return {"status": "healthy"}
+
+# Copilot Recommendation: Add DB connectivity check (e.g., run a lightweight query) so you know if the backend is healthy and the DB is reachable.
