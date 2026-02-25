@@ -38,13 +38,6 @@ const UploadStatement = () => {
     if (relatedTarget && currentTarget.contains(relatedTarget)) {
       return
     }
-    const currentTarget = e.currentTarget as HTMLElement
-    const relatedTarget = e.relatedTarget as Node | null
-
-    // Only clear dragging when actually leaving the drop zone, not when moving between its children
-    if (relatedTarget && currentTarget.contains(relatedTarget)) {
-      return
-    }
     setDragging(false)
   }
 
