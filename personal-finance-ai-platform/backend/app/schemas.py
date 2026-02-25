@@ -77,6 +77,7 @@ class TransactionBulkUpdate(BaseModel):
     status: Optional[TransactionStatus] = None
 
 # Category schemas
+## Copilot recommendation => Validation: Add constraints to sort_order (e.g., conint(ge=0)) to prevent negative ordering values
 class CategoryBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     color: Optional[str] = Field(default="#3B82F6", pattern="^#[0-9A-Fa-f]{6}$")
@@ -98,18 +99,18 @@ class CategoryUpdate(BaseModel):
 class CategoryResponse(BaseModel):
     id: int
     name: str
-    color: str
-    icon: str
-    type: str
-    parent_id: Optional[int]
-    sort_order: int
-    is_system: bool
-    is_active: bool
-    is_hidden: bool
-    created_at: datetime
-    updated_at: Optional[datetime]
-    user_id: Optional[int]
-    
+    color: str = "#3B82F6"
+    icon: str = "💰"
+    type: str = "expense"
+    parent_id: Optional[int] = None
+    sort_order: int = 0
+    is_system: bool = False
+    is_active: bool = True
+    is_hidden: bool = False
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    user_id: Optional[int] = None
+
     class Config:
         from_attributes = True
 
@@ -146,6 +147,7 @@ class MerchantRuleResponse(BaseModel):
         from_attributes = True
 
 # Budget schemas
+## Copilot recommendation => Date validation: Add a validator to ensure end_date >= start_date
 class BudgetCreate(BaseModel):
     name: str
     amount: float
@@ -170,6 +172,7 @@ class BudgetResponse(BaseModel):
         from_attributes = True
 
 # Insights schemas
+## Copilot recommendation => InsightResponse: source is "rule" or "ai" — better as an enum for strictness
 class InsightResponse(BaseModel):
     type: str
     title: str
@@ -204,6 +207,8 @@ class AccountResponse(BaseModel):
         from_attributes = True
 
 # Import Job schemas
+## Copilot recommendation => Status field: Should be an enum (pending, processing, completed, failed) instead of free-form string
+## Copilot recommendation => Error message: Consider defaulting to "" instead of None for consistency in API responses
 class ImportJobResponse(BaseModel):
     id: int
     filename: str

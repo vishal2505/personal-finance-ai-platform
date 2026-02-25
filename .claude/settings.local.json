@@ -5,7 +5,14 @@
       "Bash(git checkout:*)",
       "Bash(git pull:*)",
       "Bash(docker compose up:*)",
-      "Bash(docker compose exec:*)"
+      "Bash(docker compose exec:*)",
+      "Bash(mysql.exe --version:*)",
+      "Bash(\"C:/Program Files/MySQL/MySQL Server 8.0/bin/mysql.exe\" --version)",
+      "Bash(docker compose down:*)",
+      "Bash(netstat:*)",
+      "Bash(tasklist:*)",
+      "Bash(net stop:*)",
+      "Bash(DB_PORT_MAPPING=\"3307:3306\" docker compose up:*)"
     ]
   }
 }
