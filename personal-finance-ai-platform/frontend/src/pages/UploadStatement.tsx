@@ -5,6 +5,7 @@ import { Upload, FileText, File, X, Sparkles } from 'lucide-react'
 import Card from '../components/Card'
 import clsx from 'clsx'
 
+
 const UploadStatement = () => {
   const [file, setFile] = useState<File | null>(null)
   const [bankName, setBankName] = useState('')
@@ -13,7 +14,33 @@ const UploadStatement = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [dragging, setDragging] = useState(false)
   const navigate = useNavigate()
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragging(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragging(false)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragging(false)
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const droppedFile = e.dataTransfer.files[0]
+      const extension = droppedFile.name.split('.').pop()?.toLowerCase()
+      if (extension === 'pdf' || extension === 'csv') {
+        setFile(droppedFile)
+        setError('')
+      } else {
+        setError('Only PDF and CSV files are allowed')
+      }
+    }
+  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -87,9 +114,12 @@ const UploadStatement = () => {
                 Statement File
               </label>
               <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
                 className={clsx(
                   'relative flex h-64 flex-col items-center justify-center rounded-2xl border-2 border-dashed transition',
-                  file
+                  dragging || file
                     ? 'border-[#d07a63] bg-[#fff7f4]'
                     : 'border-[#e8e4df] bg-[#fbf8f4] hover:border-[#d07a63] hover:bg-white'
                 )}
