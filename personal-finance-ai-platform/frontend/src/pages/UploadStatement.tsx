@@ -6,6 +6,13 @@ import Card from '../components/Card'
 import clsx from 'clsx'
 
 
+const getFileExtension = (filename: string) => filename.split('.').pop()?.toLowerCase() ?? ''
+const isPdf = (filename: string) => getFileExtension(filename) === 'pdf'
+const isAcceptedFile = (filename: string) => {
+  const ext = getFileExtension(filename)
+  return ext === 'pdf' || ext === 'csv'
+}
+
 const UploadStatement = () => {
   const [file, setFile] = useState<File | null>(null)
   const [bankName, setBankName] = useState('')
@@ -39,8 +46,7 @@ const UploadStatement = () => {
     setDragging(false)
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const droppedFile = e.dataTransfer.files[0]
-      const extension = droppedFile.name.split('.').pop()?.toLowerCase()
-      if (extension === 'pdf' || extension === 'csv') {
+      if (isAcceptedFile(droppedFile.name)) {
         setFile(droppedFile)
         setError('')
       } else {
@@ -51,8 +57,13 @@ const UploadStatement = () => {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0])
-      setError('')
+      const selectedFile = e.target.files[0]
+      if (isAcceptedFile(selectedFile.name)) {
+        setFile(selectedFile)
+        setError('')
+      } else {
+        setError('Only PDF and CSV files are allowed')
+      }
     }
   }
 
@@ -74,7 +85,7 @@ const UploadStatement = () => {
       if (cardLastFour) formData.append('card_last_four', cardLastFour)
       if (statementPeriod) formData.append('statement_period', statementPeriod)
 
-      const endpoint = file.name.endsWith('.pdf') ? '/api/upload/pdf' : '/api/upload/csv'
+      const endpoint = isPdf(file.name) ? '/api/upload/pdf' : '/api/upload/csv'
       const response = await axios.post(endpoint, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
@@ -135,7 +146,7 @@ const UploadStatement = () => {
                   {file ? (
                     <div className="flex flex-col items-center gap-3">
                       <div className="grid h-16 w-16 place-items-center rounded-full bg-white shadow-sm ring-1 ring-black/5">
-                        {file.name.endsWith('.pdf') ? (
+                        {isPdf(file.name) ? (
                           <FileText className="h-8 w-8 text-[#d07a63]" />
                         ) : (
                           <File className="h-8 w-8 text-[#2b2521]" />
