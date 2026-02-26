@@ -3,6 +3,7 @@ locals {
   openai_secret = var.openai_secret_arn != "" ? [
     { name = "OPENAI_API_KEY", valueFrom = var.openai_secret_arn }
   ] : []
+  cors_origins_effective = var.cors_origins != "" ? var.cors_origins : "https://${aws_cloudfront_distribution.frontend.domain_name}"
 }
 
 # -----------------------------
@@ -23,18 +24,40 @@ data "aws_subnets" "default" {
 # -----------------------------
 # Security Groups
 # -----------------------------
-# ECS host SG: allow HTTP from internet (demo)
+# ALB SG: allow HTTP from internet (CloudFront will terminate HTTPS)
+resource "aws_security_group" "alb_sg" {
+  name        = "${local.name_prefix}-alb-sg"
+  description = "ALB SG"
+  vpc_id      = data.aws_vpc.default.id
+
+  ingress {
+    description = "HTTP from internet"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# ECS host SG: allow HTTP only from ALB
 resource "aws_security_group" "ecs_host_sg" {
   name        = "${local.name_prefix}-ecs-host-sg"
   description = "ECS host SG"
   vpc_id      = data.aws_vpc.default.id
 
   ingress {
-    description = "HTTP for demo"
-    from_port   = var.container_port
-    to_port     = var.container_port
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    description     = "HTTP from ALB"
+    from_port       = var.container_port
+    to_port         = var.container_port
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb_sg.id]
   }
 
   # optional SSH - safer to keep disabled; enable only if you need it
@@ -165,6 +188,49 @@ resource "aws_autoscaling_group" "ecs_asg" {
   }
 }
 
+# -----------------------------
+# ALB for backend (HTTP origin for CloudFront)
+# -----------------------------
+resource "aws_lb" "app" {
+  name               = "${local.name_prefix}-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb_sg.id]
+  subnets            = data.aws_subnets.default.ids
+}
+
+resource "aws_lb_target_group" "app" {
+  name     = "${local.name_prefix}-tg"
+  port     = var.container_port
+  protocol = "HTTP"
+  vpc_id   = data.aws_vpc.default.id
+
+  health_check {
+    path                = "/api/health"
+    matcher             = "200-399"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+  }
+}
+
+resource "aws_autoscaling_attachment" "ecs_asg_tg" {
+  autoscaling_group_name = aws_autoscaling_group.ecs_asg.name
+  lb_target_group_arn    = aws_lb_target_group.app.arn
+}
+
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.app.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
+  }
+}
+
 
 # Task execution role (needed even without ECR; good practice)
 data "aws_iam_policy_document" "task_assume" {
@@ -232,7 +298,7 @@ resource "aws_ecs_task_definition" "app" {
         { name = "DB_USER", value = var.db_username },
         { name = "DB_PASSWORD", value = var.db_password },
         { name = "DB_PORT", value = "3306" },
-        { name = "CORS_ORIGINS", value = var.cors_origins }
+        { name = "CORS_ORIGINS", value = local.cors_origins_effective }
       ]
       secrets = local.openai_secret
       logConfiguration = {
@@ -341,4 +407,101 @@ resource "aws_s3_bucket_policy" "frontend" {
   policy = data.aws_iam_policy_document.frontend_public_read.json
 
   depends_on = [aws_s3_bucket_public_access_block.frontend]
+}
+
+# -----------------------------
+# CloudFront (HTTPS endpoints without custom domain)
+# -----------------------------
+data "aws_cloudfront_cache_policy" "caching_disabled" {
+  name = "Managed-CachingDisabled"
+}
+
+data "aws_cloudfront_cache_policy" "caching_optimized" {
+  name = "Managed-CachingOptimized"
+}
+
+data "aws_cloudfront_origin_request_policy" "all_viewer" {
+  name = "Managed-AllViewer"
+}
+
+resource "aws_cloudfront_distribution" "frontend" {
+  enabled             = true
+  default_root_object = "index.html"
+
+  origin {
+    domain_name = aws_s3_bucket_website_configuration.frontend.website_endpoint
+    origin_id   = "frontend-s3-website"
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  default_cache_behavior {
+    target_origin_id       = "frontend-s3-website"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    cached_methods         = ["GET", "HEAD", "OPTIONS"]
+    cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
+  }
+
+  custom_error_response {
+    error_code         = 403
+    response_code      = 200
+    response_page_path = "/index.html"
+  }
+
+  custom_error_response {
+    error_code         = 404
+    response_code      = 200
+    response_page_path = "/index.html"
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
+}
+
+resource "aws_cloudfront_distribution" "backend" {
+  enabled = true
+
+  origin {
+    domain_name = aws_lb.app.dns_name
+    origin_id   = "backend-alb"
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  default_cache_behavior {
+    target_origin_id       = "backend-alb"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
+    cached_methods         = ["GET", "HEAD", "OPTIONS"]
+    cache_policy_id        = data.aws_cloudfront_cache_policy.caching_disabled.id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer.id
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
 }
