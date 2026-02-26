@@ -23,6 +23,9 @@ statements are imported through secure manual upload workflows.
 - CI/CD: GitHub Actions
 - Deployment: Public cloud
 
+## AWS Architecture
+See the diagram in [architecture/aws-architecture.md](architecture/aws-architecture.md).
+
 ## Deployment (AWS demo)
 
 This project deploys the backend to ECS on EC2 and the frontend to S3, with HTTPS provided by CloudFront for both frontend and backend (no custom domain required).
