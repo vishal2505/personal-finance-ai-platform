@@ -14,6 +14,18 @@ output "frontend_website_url" {
   value = aws_s3_bucket_website_configuration.frontend.website_endpoint
 }
 
+output "frontend_cloudfront_url" {
+  value = "https://${aws_cloudfront_distribution.frontend.domain_name}"
+}
+
+output "backend_cloudfront_url" {
+  value = "https://${aws_cloudfront_distribution.backend.domain_name}"
+}
+
+output "alb_dns_name" {
+  value = aws_lb.app.dns_name
+}
+
 output "how_to_access_app" {
-  value = "Find the ECS EC2 instance public IP in the EC2 console. Open http://<PUBLIC_IP>/"
+  value = "Use the CloudFront HTTPS URL from frontend_cloudfront_url. Backend HTTPS is backend_cloudfront_url."
 }

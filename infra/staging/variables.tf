@@ -32,7 +32,8 @@ variable "container_port" {
 
 variable "cors_origins" {
   type    = string
-  default = "http://localhost:3000,http://localhost:5173"
+  description = "Comma-separated CORS origins; leave empty to use the CloudFront frontend HTTPS URL."
+  default = ""
 }
 
 # RDS MySQL settings (free-tier friendly)
