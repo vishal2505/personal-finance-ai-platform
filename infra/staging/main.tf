@@ -4,6 +4,8 @@ locals {
     { name = "OPENAI_API_KEY", valueFrom = var.openai_secret_arn }
   ] : []
   cors_origins_effective = var.cors_origins != "" ? var.cors_origins : "https://${aws_cloudfront_distribution.frontend.domain_name}"
+  alb_name = "pfai-${var.env}-alb"
+  tg_name  = "pfai-${var.env}-tg"
 }
 
 # -----------------------------
@@ -192,7 +194,7 @@ resource "aws_autoscaling_group" "ecs_asg" {
 # ALB for backend (HTTP origin for CloudFront)
 # -----------------------------
 resource "aws_lb" "app" {
-  name               = "${local.name_prefix}-alb"
+  name               = local.alb_name
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_sg.id]
@@ -200,7 +202,7 @@ resource "aws_lb" "app" {
 }
 
 resource "aws_lb_target_group" "app" {
-  name     = "${local.name_prefix}-tg"
+  name     = local.tg_name
   port     = var.container_port
   protocol = "HTTP"
   vpc_id   = data.aws_vpc.default.id
