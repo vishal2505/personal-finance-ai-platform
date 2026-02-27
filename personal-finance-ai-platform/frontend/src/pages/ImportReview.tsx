@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { format } from 'date-fns'
-import { Check, ChevronDown, Save } from 'lucide-react'
+import { Check, ChevronDown, Save, Trash2 } from 'lucide-react'
 import Card from '../components/Card'
 import Checkbox from '../components/Checkbox'
 import clsx from 'clsx'
@@ -125,6 +125,34 @@ const ImportReview = () => {
     }
   }
 
+  const handleDelete = async () => {
+    if (selectedTransactions.size === 0) return
+
+    const confirmDelete = window.confirm(`Are you sure you want to delete ${selectedTransactions.size} transactions? This cannot be undone.`)
+    if (!confirmDelete) return
+
+    setLoading(true)
+    try {
+      await axios.post('/api/transactions/bulk-delete', {
+        transaction_ids: Array.from(selectedTransactions)
+      })
+
+      // Update local state to remove deleted transactions
+      const remainingTransactions = transactions.filter(t => !selectedTransactions.has(t.id))
+      setTransactions(remainingTransactions)
+
+      // Clear selection
+      setSelectedTransactions(new Set())
+
+      // If no transactions left, maybe navigate back or show empty state
+    } catch (error) {
+      console.error('Error deleting transactions:', error)
+      alert('Error deleting transactions')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0)
 
   return (
@@ -199,6 +227,14 @@ const ImportReview = () => {
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9a8678]" />
               </div>
+              <button
+                onClick={handleDelete}
+                disabled={loading || selectedTransactions.size === 0}
+                className="flex items-center gap-2 rounded-xl bg-red-50 px-4 py-2 text-sm font-bold text-red-600 ring-1 ring-red-200 transition hover:bg-red-100 disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </button>
               <button
                 onClick={handleSave}
                 disabled={loading}
