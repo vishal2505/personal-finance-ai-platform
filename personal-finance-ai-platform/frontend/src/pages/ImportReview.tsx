@@ -125,11 +125,26 @@ const ImportReview = () => {
     }
   }
 
+  const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0)
+
   return (
     <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-extrabold tracking-tight text-[#2b2521]">Import Review</h1>
-        <p className="mt-1 text-sm text-[#9a8678]">Review and categorize imported transactions.</p>
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight text-[#2b2521]">Import Review</h1>
+          <p className="mt-1 text-sm text-[#9a8678]">Review and categorize imported transactions.</p>
+        </div>
+        <div className="flex bg-white rounded-2xl p-2 px-6 shadow-sm ring-1 ring-[#e8e4df] items-center gap-8">
+          <div className="flex flex-col">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-[#b8a79c]">Transactions</span>
+            <span className="text-xl font-black text-[#2b2521] leading-tight">{transactions.length}</span>
+          </div>
+          <div className="w-px h-8 bg-[#e8e4df]"></div>
+          <div className="flex flex-col">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-[#b8a79c]">Total SGD</span>
+            <span className="text-2xl font-black text-[#d07a63] leading-tight">${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+        </div>
       </div>
 
       {transactions.length === 0 ? (
