@@ -239,12 +239,12 @@ def _find_header_indices(header_row: List[str]) -> dict:
         E.g., {'date': 0, 'amount': 2, 'merchant': 1}
         
     Raises:
-        ValueError: If required columns (date, amount) not found
+        ValueError: If required columns (date/amount) not found
     """
     indices = {}
     
-    date_keywords = ['date', 'transaction date', 'posting date', 'posted', 'trans date']
-    amount_keywords = ['amount', 'debit', 'credit', 'value', 'transaction amount', 'amt']
+    date_keywords = ['date', 'transaction date', 'posting date', 'posted', 'trans date', 'date of trans']
+    amount_keywords = ['amount', 'debit', 'credit', 'value', 'transaction amount', 'amt', 'amount (sgd)', 'amount(sgd)']
     merchant_keywords = ['description', 'particulars', 'merchant', 'details', 'narration', 'remarks']
     
     header_lower = [str(h).lower().replace('\n', ' ').strip() for h in header_row if h]
@@ -269,7 +269,13 @@ def _find_header_indices(header_row: List[str]) -> dict:
     
     # If no merchant column found, use column after date or second column
     if 'merchant' not in indices:
-        indices['merchant'] = indices.get('date', 0) + 1 if indices.get('date', 0) + 1 < len(header_lower) else 1
+        # Avoid using the amount column as merchant
+        amount_idx = indices.get('amount')
+        date_idx = indices.get('date', 0)
+        potential_merchant_idx = date_idx + 1 if date_idx + 1 < len(header_lower) else 1
+        if potential_merchant_idx == amount_idx:
+             potential_merchant_idx = 1 if amount_idx != 1 else 0
+        indices['merchant'] = potential_merchant_idx
     
     # Validate required columns
     if 'date' not in indices or 'amount' not in indices:
@@ -338,8 +344,53 @@ def _parse_amount_with_suffix(amount_str: str) -> float:
         return 0.0
 
 
+def _parse_text_fallback(text: str) -> List[dict]:
+    """Fallback parser that uses regex to identify transactions in raw text.
+    
+    This is useful for PDFs where table borders are missing and extract_tables fails.
+    Identifies patterns like "01/12/2025 STARBUCKS SINGAPORE 7.80"
+    
+    Args:
+        text: Raw text from PDF page
+        
+    Returns:
+        List of parsed transaction dictionaries
+    """
+    transactions = []
+    
+    # Pattern: Date (DD/MM/YYYY or DD-MM-YYYY) + Merchant (text) + Amount (decimal)
+    # Handles both positive and negative amounts
+    pattern = r'(\d{2}[/-]\d{2}[/-]\d{4})\s+(.+?)\s+(-?\d+\.\d{2})'
+    
+    matches = re.finditer(pattern, text)
+    for match in matches:
+        date_str, merchant, amount_str = match.groups()
+        
+        # Parse date
+        date = _parse_date(date_str)
+        if not date:
+            continue
+            
+        # Parse amount
+        try:
+            amount = float(amount_str.replace(',', ''))
+            if amount == 0.0:
+                continue
+                
+            transactions.append({
+                'date': date,
+                'amount': abs(amount),
+                'merchant': merchant.strip(),
+                'description': None
+            })
+        except ValueError:
+            continue
+            
+    return transactions
+
+
 def parse_pdf(file_content: bytes) -> List[dict]:
-    """Parse PDF file and extract transactions with dynamic header detection.
+    """Parse PDF file and extract transactions with dynamic header detection and text fallback.
     
     Features:
     - Dynamic header discovery: Scans first few rows for column names
@@ -348,6 +399,7 @@ def parse_pdf(file_content: bytes) -> List[dict]:
     - Advanced amount parsing: Handles Dr/Cr suffixes, currency symbols
     - Skips total rows: Ignores summary rows at end of statements
     - Multiple date format support
+    - TEXT FALLBACK: Uses regex if table extraction fails
     
     Args:
         file_content: Raw PDF file bytes
@@ -362,77 +414,66 @@ def parse_pdf(file_content: bytes) -> List[dict]:
     try:
         with pdfplumber.open(io.BytesIO(file_content)) as pdf:
             for page_num, page in enumerate(pdf.pages):
-                text = page.extract_text()
-                if not text:
-                    continue
+                page_transactions = []
                 
-                # Try to extract table data
+                # 1. TRY TABLE EXTRACTION FIRST
                 tables = page.extract_tables()
-                if not tables:
-                    continue
-                
-                for table_num, table in enumerate(tables):
-                    if not table or len(table) < 2:
-                        continue
-                    
-                    try:
-                        # DYNAMIC HEADER DISCOVERY: Find column indices from header
-                        header_indices = _find_header_indices(table[0])
-                        date_col = header_indices['date']
-                        amount_col = header_indices['amount']
-                        merchant_col = header_indices['merchant']
-                        
-                    except (ValueError, IndexError) as e:
-                        # Skip this table if we can't find headers
-                        continue
-                    
-                    # Process data rows (skip header at index 0)
-                    for row_num, row in enumerate(table[1:], 1):
-                        if not row or len(row) <= max(date_col, amount_col, merchant_col):
+                if tables:
+                    for table_num, table in enumerate(tables):
+                        if not table or len(table) < 2:
                             continue
                         
                         try:
-                            # Get raw cell values and clean newlines
-                            date_str = str(row[date_col]).replace('\n', ' ').strip() if row[date_col] else ""
-                            merchant = str(row[merchant_col]).replace('\n', ' ').strip() if row[merchant_col] else ""
-                            amount_str = str(row[amount_col]).replace('\n', ' ').strip() if row[amount_col] else ""
+                            # DYNAMIC HEADER DISCOVERY: Find column indices from header
+                            header_indices = _find_header_indices(table[0])
+                            date_col = header_indices['date']
+                            amount_col = header_indices['amount']
+                            merchant_col = header_indices['merchant']
                             
-                            # IGNORE TOTAL ROWS: Skip rows that start with "Total"
-                            if any(keyword in str(row[0]).lower() for keyword in ['total', 'subtotal', 'balance']):
-                                continue
-                            
-                            # Skip empty required fields
-                            if not date_str or not merchant or not amount_str:
-                                continue
-                            
-                            # ADVANCED AMOUNT CLEANING: Handle Dr/Cr suffixes
-                            amount = _parse_amount_with_suffix(amount_str)
-                            if amount == 0.0:
-                                continue
-                            
-                            # Try to parse date with multiple formats
-                            date = None
-                            for fmt in ['%d/%m/%Y', '%m/%d/%Y', '%Y-%m-%d', '%d %b %Y', 
-                                       '%d-%m-%Y', '%m-%d-%Y', '%Y/%m/%d', '%d.%m.%Y',
-                                       '%d %b', '%d-%b', '%d/%m']:
-                                try:
-                                    date = datetime.strptime(date_str, fmt)
-                                    break
-                                except ValueError:
+                            # Process data rows (skip header at index 0)
+                            for row_num, row in enumerate(table[1:], 1):
+                                if not row or len(row) <= max(date_col, amount_col, merchant_col):
                                     continue
-                            
-                            # Only add if we successfully parsed date and have merchant
-                            if date and merchant:
-                                transactions.append({
-                                    'date': date,
-                                    'amount': abs(amount),
-                                    'merchant': merchant,
-                                    'description': None
-                                })
-                        
-                        except (ValueError, TypeError, AttributeError, IndexError):
-                            # Skip malformed rows and continue
+                                
+                                # Get raw cell values and clean newlines
+                                date_str = str(row[date_col]).replace('\n', ' ').strip() if row[date_col] else ""
+                                merchant = str(row[merchant_col]).replace('\n', ' ').strip() if row[merchant_col] else ""
+                                amount_str = str(row[amount_col]).replace('\n', ' ').strip() if row[amount_col] else ""
+                                
+                                # IGNORE TOTAL ROWS: Skip rows that start with "Total"
+                                if any(keyword in str(row[0]).lower() for keyword in ['total', 'subtotal', 'balance']):
+                                    continue
+                                
+                                # Skip empty required fields
+                                if not date_str or not merchant or not amount_str:
+                                    continue
+                                
+                                # ADVANCED AMOUNT CLEANING: Handle Dr/Cr suffixes
+                                amount = _parse_amount_with_suffix(amount_str)
+                                if amount == 0.0:
+                                    continue
+                                
+                                date = _parse_date(date_str)
+                                
+                                # Only add if we successfully parsed date and have merchant
+                                if date and merchant:
+                                    page_transactions.append({
+                                        'date': date,
+                                        'amount': abs(amount),
+                                        'merchant': merchant,
+                                        'description': None
+                                    })
+                        except (ValueError, IndexError):
+                            # Skip this table if header detection fails
                             continue
+                
+                # 2. FALLBACK: IF NO TRANSACTIONS FOUND IN TABLES, TRY TEXT PARSING
+                if not page_transactions:
+                    text = page.extract_text()
+                    if text:
+                        page_transactions = _parse_text_fallback(text)
+                
+                transactions.extend(page_transactions)
         
         if not transactions:
             raise ValueError("No valid transactions found in PDF")
