@@ -34,7 +34,7 @@ def _get_transactions_list(db: Session, user_id: int, start_date: Optional[datet
     rows = db.execute(
         text(f"""
             SELECT t.id, t.date, t.amount, t.merchant, t.description, t.transaction_type, t.status,
-                   t.bank_name, t.card_last_four, t.category_id, c.name AS category_name
+                   t.bank_name, t.card_last_four, t.category_id, c.name AS category_name, t.import_job_id
             FROM transactions t
             LEFT JOIN categories c ON c.id = t.category_id
             WHERE {where}
@@ -61,7 +61,7 @@ def _get_transactions_list(db: Session, user_id: int, start_date: Optional[datet
             category_name=row[10],
             account_id=None,
             account_name=None,
-            import_job_id=None,
+            import_job_id=row[11],
             source="manual",
             is_anomaly=False,
             anomaly_score=0.0,

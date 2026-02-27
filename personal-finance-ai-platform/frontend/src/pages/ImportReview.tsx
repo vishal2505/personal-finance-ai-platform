@@ -16,6 +16,12 @@ interface Transaction {
   category_id: number | null
   category_name: string | null
   status: string
+  import_job_id: number | null
+}
+
+interface ImportJob {
+  id: number
+  filename: string
 }
 
 const ImportReview = () => {
@@ -27,16 +33,29 @@ const ImportReview = () => {
   const [selectedTransactions, setSelectedTransactions] = useState<Set<number>>(new Set())
   const [loading, setLoading] = useState(false)
   const [bulkCategory, setBulkCategory] = useState('')
+  const [importJobs, setImportJobs] = useState<ImportJob[]>([])
+  const [selectedFileId, setSelectedFileId] = useState<number | 'all'>('all')
 
   useEffect(() => {
     if (location.state?.transactions) {
       setTransactions(location.state.transactions)
       fetchCategories()
+      fetchImportJobs()
     } else {
       fetchPendingTransactions()
       fetchCategories()
+      fetchImportJobs()
     }
   }, [location])
+
+  const fetchImportJobs = async () => {
+    try {
+      const response = await axios.get('/api/imports/')
+      setImportJobs(response.data)
+    } catch (error) {
+      console.error('Error fetching import jobs:', error)
+    }
+  }
 
   const fetchPendingTransactions = async () => {
     try {
@@ -153,7 +172,11 @@ const ImportReview = () => {
     }
   }
 
-  const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0)
+  const filteredTransactions = selectedFileId === 'all'
+    ? transactions
+    : transactions.filter(t => t.import_job_id === selectedFileId)
+
+  const totalAmount = filteredTransactions.reduce((sum, t) => sum + t.amount, 0)
 
   return (
     <div className="p-8">
@@ -165,7 +188,7 @@ const ImportReview = () => {
         <div className="flex bg-white rounded-2xl p-2 px-6 shadow-sm ring-1 ring-[#e8e4df] items-center gap-8">
           <div className="flex flex-col">
             <span className="text-[10px] font-bold uppercase tracking-widest text-[#b8a79c]">Transactions</span>
-            <span className="text-xl font-black text-[#2b2521] leading-tight">{transactions.length}</span>
+            <span className="text-xl font-black text-[#2b2521] leading-tight">{filteredTransactions.length}</span>
           </div>
           <div className="w-px h-8 bg-[#e8e4df]"></div>
           <div className="flex flex-col">
@@ -178,12 +201,29 @@ const ImportReview = () => {
       {transactions.length === 0 ? (
         <Card className="text-center">
           <p className="text-[#9a8678]">No pending transactions to review.</p>
-          <button
-            onClick={() => navigate('/upload')}
-            className="mt-4 font-semibold text-[#d07a63] hover:text-[#b85f4a]"
-          >
-            Upload a statement
-          </button>
+          <div className="mt-6 flex flex-col items-center gap-4">
+            <div className="relative w-full max-w-xs">
+              <select
+                value={selectedFileId}
+                onChange={(e) => setSelectedFileId(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
+                className="w-full appearance-none rounded-xl border-0 bg-[#fbf8f4] py-2 pl-4 pr-10 text-sm font-semibold text-[#2b2521] ring-1 ring-[#e8e4df] focus:ring-2 focus:ring-[#d07a63]"
+              >
+                <option value="all">All Files</option>
+                {importJobs.map((job) => (
+                  <option key={job.id} value={job.id}>
+                    {job.filename}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9a8678]" />
+            </div>
+            <button
+              onClick={() => navigate('/upload')}
+              className="font-semibold text-[#d07a63] hover:text-[#b85f4a]"
+            >
+              Upload a statement
+            </button>
+          </div>
         </Card>
       ) : categories.length === 0 ? (
         <Card className="text-center py-8">
@@ -200,11 +240,27 @@ const ImportReview = () => {
         <div className="space-y-6">
           <Card className="flex items-center justify-between py-4">
             <div className="flex items-center gap-6">
+              <div className="relative">
+                <select
+                  value={selectedFileId}
+                  onChange={(e) => setSelectedFileId(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
+                  className="appearance-none rounded-xl border-0 bg-[#fbf8f4] py-2 pl-4 pr-10 text-sm font-semibold text-[#2b2521] ring-1 ring-[#e8e4df] focus:ring-2 focus:ring-[#d07a63]"
+                >
+                  <option value="all">All Uploaded Files</option>
+                  {importJobs.map((job) => (
+                    <option key={job.id} value={job.id}>
+                      {job.filename}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9a8678]" />
+              </div>
+              <div className="h-4 w-px bg-[#e8e4df]"></div>
               <button
                 onClick={handleSelectAll}
                 className="text-sm font-bold text-[#d07a63] transition hover:text-[#b85f4a]"
               >
-                {selectedTransactions.size === transactions.length ? 'Deselect All' : 'Select All'}
+                {selectedTransactions.size === filteredTransactions.length ? 'Deselect All' : 'Select All'}
               </button>
               <span className="text-sm font-medium text-[#9a8678]">
                 {selectedTransactions.size} selected
@@ -259,7 +315,7 @@ const ImportReview = () => {
                   <tr>
                     <th className="w-12 px-6 py-4">
                       <Checkbox
-                        checked={selectedTransactions.size === transactions.length && transactions.length > 0}
+                        checked={selectedTransactions.size === filteredTransactions.length && filteredTransactions.length > 0}
                         onChange={handleSelectAll}
                       />
                     </th>
@@ -271,7 +327,7 @@ const ImportReview = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#f0ebe6]">
-                  {transactions.map((transaction) => (
+                  {filteredTransactions.map((transaction) => (
                     <tr key={transaction.id} className="group transition hover:bg-[#fbf8f4]">
                       <td className="px-6 py-4">
                         <Checkbox
