@@ -217,6 +217,7 @@ class ImportJobResponse(BaseModel):
     statement_period: Optional[str]
     total_transactions: int
     processed_transactions: int
+    total_amount: float
     error_message: Optional[str]
     created_at: datetime
     completed_at: Optional[datetime]

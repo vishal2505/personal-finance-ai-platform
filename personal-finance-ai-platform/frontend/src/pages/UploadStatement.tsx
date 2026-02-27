@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { Upload, FileText, File, X, Sparkles } from 'lucide-react'
+import { Upload, FileText, File, X, Sparkles, CheckCircle, AlertCircle, Clock } from 'lucide-react'
 import Card from '../components/Card'
+import { format } from 'date-fns'
 import clsx from 'clsx'
 
 
@@ -19,10 +20,27 @@ const UploadStatement = () => {
   const [cardLastFour, setCardLastFour] = useState('')
   const [statementPeriod, setStatementPeriod] = useState('')
   const [loading, setLoading] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(true)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [dragging, setDragging] = useState(false)
+  const [history, setHistory] = useState<any[]>([])
   const navigate = useNavigate()
+
+  useEffect(() => {
+    fetchHistory()
+  }, [])
+
+  const fetchHistory = async () => {
+    try {
+      const response = await axios.get('/api/imports/')
+      setHistory(response.data)
+    } catch (err) {
+      console.error('Error fetching import history:', err)
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -92,6 +110,7 @@ const UploadStatement = () => {
 
       if (response.data && response.data.transactions && response.data.transactions.length > 0) {
         setSuccess(true)
+        fetchHistory() // Refresh history
         setTimeout(() => {
           navigate('/import-review', { state: { transactions: response.data.transactions } })
         }, 1500)
@@ -112,144 +131,213 @@ const UploadStatement = () => {
         </p>
       </div>
 
-      <div className="mx-auto max-w-2xl">
-        <Card>
-          <form onSubmit={handleSubmit} className="space-y-8">
-            {error && (
-              <div className="rounded-2xl bg-red-50 p-4 text-sm text-red-800 ring-1 ring-red-200">
-                {error}
-              </div>
-            )}
+      <div className="flex flex-col xl:flex-row gap-12 items-start justify-center">
+        <div className="w-full xl:max-w-md shrink-0">
+          <Card>
+            <form onSubmit={handleSubmit} className="space-y-8">
+              {error && (
+                <div className="rounded-2xl bg-red-50 p-4 text-sm text-red-800 ring-1 ring-red-200">
+                  {error}
+                </div>
+              )}
 
-            {success && (
-              <div className="rounded-2xl bg-green-50 p-4 text-sm text-green-800 ring-1 ring-green-200">
-                File uploaded successfully! Redirecting to review...
-              </div>
-            )}
+              {success && (
+                <div className="rounded-2xl bg-green-50 p-4 text-sm text-green-800 ring-1 ring-green-200">
+                  File uploaded successfully! Redirecting to review...
+                </div>
+              )}
 
-            <div>
-              <label className="mb-3 block text-sm font-bold uppercase tracking-wider text-[#b8a79c]">
-                Statement File
-              </label>
-              <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                className={clsx(
-                  'relative flex h-64 flex-col items-center justify-center rounded-2xl border-2 border-dashed transition',
-                  dragging || file
-                    ? 'border-[#d07a63] bg-[#fff7f4]'
-                    : 'border-[#e8e4df] bg-[#fbf8f4] hover:border-[#d07a63] hover:bg-white'
-                )}
-              >
-                <div className="space-y-4 text-center">
-                  {file ? (
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="grid h-16 w-16 place-items-center rounded-full bg-white shadow-sm ring-1 ring-black/5">
-                        {isPdf(file.name) ? (
-                          <FileText className="h-8 w-8 text-[#d07a63]" />
-                        ) : (
-                          <File className="h-8 w-8 text-[#2b2521]" />
-                        )}
-                      </div>
-                      <div className="font-semibold text-[#2b2521]">{file.name}</div>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          setFile(null)
-                        }}
-                        className="flex items-center gap-1.5 rounded-full bg-[#f4ebe6] px-3 py-1 text-xs font-bold text-[#cc735d] transition hover:bg-[#ebd5ce]"
-                      >
-                        <X className="h-3 w-3" />
-                        Remove
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-white shadow-sm ring-1 ring-black/5">
-                        <Upload className="h-8 w-8 text-[#9a8678]" />
-                      </div>
-                      <div className="text-sm">
-                        <label className="relative cursor-pointer rounded-md font-bold text-[#d07a63] focus-within:outline-none focus-within:ring-2 focus-within:ring-[#d07a63] focus-within:ring-offset-2 hover:text-[#b85f4a]">
-                          <span>Upload a file</span>
-                          <input
-                            type="file"
-                            className="sr-only"
-                            accept=".pdf,.csv"
-                            onChange={handleFileChange}
-                          />
-                        </label>
-                        <span className="pl-1 text-[#9a8678]">or drag and drop</span>
-                      </div>
-                      <p className="text-xs text-[#b8a79c]">PDF or CSV up to 10MB</p>
-                    </>
+              <div>
+                <label className="mb-3 block text-sm font-bold uppercase tracking-wider text-[#b8a79c]">
+                  Statement File
+                </label>
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={clsx(
+                    'relative flex h-64 flex-col items-center justify-center rounded-2xl border-2 border-dashed transition',
+                    dragging || file
+                      ? 'border-[#d07a63] bg-[#fff7f4]'
+                      : 'border-[#e8e4df] bg-[#fbf8f4] hover:border-[#d07a63] hover:bg-white'
                   )}
+                >
+                  <div className="space-y-4 text-center">
+                    {file ? (
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="grid h-16 w-16 place-items-center rounded-full bg-white shadow-sm ring-1 ring-black/5">
+                          {isPdf(file.name) ? (
+                            <FileText className="h-8 w-8 text-[#d07a63]" />
+                          ) : (
+                            <File className="h-8 w-8 text-[#2b2521]" />
+                          )}
+                        </div>
+                        <div className="font-semibold text-[#2b2521]">{file.name}</div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            setFile(null)
+                          }}
+                          className="flex items-center gap-1.5 rounded-full bg-[#f4ebe6] px-3 py-1 text-xs font-bold text-[#cc735d] transition hover:bg-[#ebd5ce]"
+                        >
+                          <X className="h-3 w-3" />
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-white shadow-sm ring-1 ring-black/5">
+                          <Upload className="h-8 w-8 text-[#9a8678]" />
+                        </div>
+                        <div className="text-sm">
+                          <label className="relative cursor-pointer rounded-md font-bold text-[#d07a63] focus-within:outline-none focus-within:ring-2 focus-within:ring-[#d07a63] focus-within:ring-offset-2 hover:text-[#b85f4a]">
+                            <span>Upload a file</span>
+                            <input
+                              type="file"
+                              className="sr-only"
+                              accept=".pdf,.csv"
+                              onChange={handleFileChange}
+                            />
+                          </label>
+                          <span className="pl-1 text-[#9a8678]">or drag and drop</span>
+                        </div>
+                        <p className="text-xs text-[#b8a79c]">PDF or CSV up to 10MB</p>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-              <div className="space-y-1">
-                <label htmlFor="bank-name" className="text-xs font-bold uppercase tracking-wider text-[#b8a79c]">
-                  Bank Name <span className="text-[#e8e4df]">(Optional)</span>
-                </label>
-                <input
-                  type="text"
-                  id="bank-name"
-                  className="w-full rounded-xl border-0 bg-[#fbf8f4] py-3 text-sm font-semibold text-[#2b2521] ring-1 ring-[#e8e4df] placeholder:text-[#b8a79c] focus:ring-2 focus:ring-[#d07a63]"
-                  placeholder="e.g. Chase"
-                  value={bankName}
-                  onChange={(e) => setBankName(e.target.value)}
-                />
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <label htmlFor="bank-name" className="text-xs font-bold uppercase tracking-wider text-[#b8a79c]">
+                    Bank Name <span className="text-[#e8e4df]">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="bank-name"
+                    className="w-full rounded-xl border-0 bg-[#fbf8f4] py-3 px-5 text-sm font-semibold text-[#2b2521] ring-1 ring-[#e8e4df] placeholder:text-[#b8a79c] focus:ring-2 focus:ring-[#d07a63]"
+                    placeholder="e.g. Chase"
+                    value={bankName}
+                    onChange={(e) => setBankName(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label htmlFor="card-last-four" className="text-xs font-bold uppercase tracking-wider text-[#b8a79c]">
+                    Card Last 4 <span className="text-[#e8e4df]">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="card-last-four"
+                    maxLength={4}
+                    className="w-full rounded-xl border-0 bg-[#fbf8f4] py-3 px-5 text-sm font-semibold text-[#2b2521] ring-1 ring-[#e8e4df] placeholder:text-[#b8a79c] focus:ring-2 focus:ring-[#d07a63]"
+                    placeholder="e.g. 1234"
+                    value={cardLastFour}
+                    onChange={(e) => setCardLastFour(e.target.value.replace(/\D/g, ''))}
+                  />
+                </div>
               </div>
 
               <div className="space-y-1">
-                <label htmlFor="card-last-four" className="text-xs font-bold uppercase tracking-wider text-[#b8a79c]">
-                  Card Last 4 <span className="text-[#e8e4df]">(Optional)</span>
+                <label htmlFor="statement-period" className="text-xs font-bold uppercase tracking-wider text-[#b8a79c]">
+                  Period <span className="text-[#e8e4df]">(Optional)</span>
                 </label>
                 <input
                   type="text"
-                  id="card-last-four"
-                  maxLength={4}
-                  className="w-full rounded-xl border-0 bg-[#fbf8f4] py-3 text-sm font-semibold text-[#2b2521] ring-1 ring-[#e8e4df] placeholder:text-[#b8a79c] focus:ring-2 focus:ring-[#d07a63]"
-                  placeholder="1234"
-                  value={cardLastFour}
-                  onChange={(e) => setCardLastFour(e.target.value.replace(/\D/g, ''))}
+                  id="statement-period"
+                  className="w-full rounded-xl border-0 bg-[#fbf8f4] py-3 px-5 text-sm font-semibold text-[#2b2521] ring-1 ring-[#e8e4df] placeholder:text-[#b8a79c] focus:ring-2 focus:ring-[#d07a63]"
+                  placeholder="e.g. October 2023"
+                  value={statementPeriod}
+                  onChange={(e) => setStatementPeriod(e.target.value)}
                 />
               </div>
-            </div>
 
-            <div className="space-y-1">
-              <label htmlFor="statement-period" className="text-xs font-bold uppercase tracking-wider text-[#b8a79c]">
-                Period <span className="text-[#e8e4df]">(Optional)</span>
-              </label>
-              <input
-                type="text"
-                id="statement-period"
-                className="w-full rounded-xl border-0 bg-[#fbf8f4] py-3 text-sm font-semibold text-[#2b2521] ring-1 ring-[#e8e4df] placeholder:text-[#b8a79c] focus:ring-2 focus:ring-[#d07a63]"
-                placeholder="e.g. October 2023"
-                value={statementPeriod}
-                onChange={(e) => setStatementPeriod(e.target.value)}
-              />
-            </div>
+              <button
+                type="submit"
+                disabled={loading || !file}
+                className="group flex w-full items-center justify-center gap-2 rounded-xl bg-[#2b2521] py-4 text-sm font-bold text-white shadow-xl transition hover:bg-[#4a403a] disabled:opacity-50"
+              >
+                {loading ? (
+                  'Processing...'
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4 text-[#d07a63] transition group-hover:text-white" />
+                    Process Statement with AI
+                  </>
+                )}
+              </button>
+            </form>
+          </Card>
+        </div>
 
-            <button
-              type="submit"
-              disabled={loading || !file}
-              className="group flex w-full items-center justify-center gap-2 rounded-xl bg-[#2b2521] py-4 text-sm font-bold text-white shadow-xl transition hover:bg-[#4a403a] disabled:opacity-50"
-            >
-              {loading ? (
-                'Processing...'
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4 text-[#d07a63] transition group-hover:text-white" />
-                  Process Statement with AI
-                </>
-              )}
-            </button>
-          </form>
-        </Card>
+        <div className="flex-1 min-w-0 w-full">
+          <h2 className="mb-6 text-xl font-extrabold tracking-tight text-[#2b2521]">Import History</h2>
+          <Card className="overflow-hidden !p-0">
+            {historyLoading ? (
+              <div className="p-8 text-center text-[#9a8678]">Loading history...</div>
+            ) : history.length === 0 ? (
+              <div className="p-8 text-center text-[#9a8678]">No statements uploaded yet.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="bg-[#fbf8f4]">
+                    <tr>
+                      <th className="px-6 py-4 font-extrabold text-[#9a8678]">File</th>
+                      <th className="px-6 py-4 font-extrabold text-[#9a8678]">Date</th>
+                      <th className="px-6 py-4 font-extrabold text-[#9a8678]">Transactions</th>
+                      <th className="px-6 py-4 font-extrabold text-[#9a8678]">Total Amount</th>
+                      <th className="px-6 py-4 font-extrabold text-[#9a8678]">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#f0ebe6]">
+                    {history.map((job) => (
+                      <tr key={job.id} className="group transition hover:bg-[#fbf8f4]">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            {job.file_type === 'pdf' ? (
+                              <FileText className="h-4 w-4 text-[#d07a63]" />
+                            ) : (
+                              <File className="h-4 w-4 text-[#2b2521]" />
+                            )}
+                            <span className="font-bold text-[#2b2521]">{job.filename}</span>
+                          </div>
+                        </td>
+                        <td className="whitespace-nowrap px-6 py-4 font-medium text-[#6f6158]">
+                          {format(new Date(job.created_at), 'MMM dd, yyyy HH:mm')}
+                        </td>
+                        <td className="px-6 py-4 font-bold text-[#2b2521]">
+                          {job.total_transactions}
+                        </td>
+                        <td className="px-6 py-4 font-bold text-[#d07a63]">
+                          ${job.total_amount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={clsx(
+                              'inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-bold capitalize',
+                              job.status === 'completed'
+                                ? 'bg-green-50 text-green-700'
+                                : job.status === 'failed'
+                                  ? 'bg-red-50 text-red-700'
+                                  : 'bg-yellow-50 text-yellow-700'
+                            )}
+                          >
+                            {job.status === 'completed' && <CheckCircle className="h-3 w-3" />}
+                            {job.status === 'failed' && <AlertCircle className="h-3 w-3" />}
+                            {job.status === 'processing' && <Clock className="h-3 w-3" />}
+                            {job.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </div>
       </div>
     </div>
   )

@@ -142,6 +142,7 @@ class ImportJob(Base):
     
     total_transactions = Column(Integer, default=0)
     processed_transactions = Column(Integer, default=0)
+    total_amount = Column(Float, default=0.0)
     error_message = Column(Text)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())

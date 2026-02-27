@@ -608,6 +608,7 @@ async def upload_statement(
             source = TransactionSource.IMPORTED_PDF
             
         import_job.total_transactions = len(transactions_data)
+        import_job.total_amount = sum(t['amount'] for t in transactions_data)
         
         # Create transactions in PENDING status
         for t_data in transactions_data:
