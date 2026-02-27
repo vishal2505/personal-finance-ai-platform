@@ -85,15 +85,15 @@ const UploadStatement = () => {
       if (cardLastFour) formData.append('card_last_four', cardLastFour)
       if (statementPeriod) formData.append('statement_period', statementPeriod)
 
-      const endpoint = isPdf(file.name) ? '/api/upload/pdf' : '/api/upload/csv'
+      const endpoint = '/api/imports/upload'
       const response = await axios.post(endpoint, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
 
-      if (response.data && response.data.length > 0) {
+      if (response.data && response.data.transactions && response.data.transactions.length > 0) {
         setSuccess(true)
         setTimeout(() => {
-          navigate('/import-review', { state: { transactions: response.data } })
+          navigate('/import-review', { state: { transactions: response.data.transactions } })
         }, 1500)
       }
     } catch (err: any) {

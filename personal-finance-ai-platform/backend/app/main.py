@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
-from app.routers import auth, transactions, budgets, insights, anomalies, imports, settings, accounts, upload, categories
+from app.routers import auth, transactions, budgets, insights, anomalies, imports, settings, accounts, categories
 import os
 import logging
 
@@ -137,7 +137,6 @@ app.include_router(anomalies.router, prefix="/api/anomalies", tags=["anomalies"]
 app.include_router(imports.router, prefix="/api/imports", tags=["imports"])
 app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
 app.include_router(accounts.router, prefix="/api/accounts", tags=["accounts"])
-app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
 app.include_router(categories.router, prefix="/api/categories", tags=["categories"])
 
 @app.get("/")

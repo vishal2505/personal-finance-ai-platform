@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from app.database import get_db
 from app.models import Transaction, User, Category, MerchantRule, Account, ImportJob, ImportJobStatus, TransactionSource, TransactionStatus
-from app.schemas import TransactionResponse, ImportJobResponse
+from app.schemas import TransactionResponse, ImportJobResponse, UploadResponse
 from app.auth import get_current_user
 import pdfplumber
 import csv
@@ -358,17 +358,24 @@ def _parse_text_fallback(text: str) -> List[dict]:
     """
     transactions = []
     
-    # Pattern: Date (DD/MM/YYYY or DD-MM-YYYY) + Merchant (text) + Amount (decimal)
-    # Handles both positive and negative amounts
-    pattern = r'(\d{2}[/-]\d{2}[/-]\d{4})\s+(.+?)\s+(-?\d+\.\d{2})'
+    # Pattern: Date (various formats) + Merchant (text) + Amount (decimal with optional commas)
+    # Date: Matches DD/MM/YYYY, DD-MM-YYYY, DD MMM YYYY, etc.
+    # Amount: Matches 123.45, 1,234.56, -123.45
+    date_pattern = r'(\d{1,2}[/\s-](?:\d{1,2}|[A-Za-z]{3,9})[/\s-]\d{2,4})'
+    amount_pattern = r'(-?[\d,]+\.\d{2})'
+    pattern = date_pattern + r'\s+(.+?)\s+' + amount_pattern
     
+    print(f"DEBUG: Running fallback regex on text (length: {len(text)})")
     matches = re.finditer(pattern, text)
+    count = 0
     for match in matches:
         date_str, merchant, amount_str = match.groups()
+        print(f"DEBUG: Found match candidate: {date_str} | {merchant} | {amount_str}")
         
         # Parse date
         date = _parse_date(date_str)
         if not date:
+            print(f"DEBUG: Date parsing failed for: {date_str}")
             continue
             
         # Parse amount
@@ -383,9 +390,12 @@ def _parse_text_fallback(text: str) -> List[dict]:
                 'merchant': merchant.strip(),
                 'description': None
             })
+            count += 1
         except ValueError:
+            print(f"DEBUG: Amount parsing failed for: {amount_str}")
             continue
             
+    print(f"DEBUG: Fallback parsed {count} transactions")
     return transactions
 
 
@@ -469,13 +479,17 @@ def parse_pdf(file_content: bytes) -> List[dict]:
                 
                 # 2. FALLBACK: IF NO TRANSACTIONS FOUND IN TABLES, TRY TEXT PARSING
                 if not page_transactions:
+                    print(f"DEBUG: No transactions in tables for Page {page_num+1}, trying fallback")
                     text = page.extract_text()
                     if text:
                         page_transactions = _parse_text_fallback(text)
+                    else:
+                        print(f"DEBUG: No text extracted for Page {page_num+1}")
                 
                 transactions.extend(page_transactions)
         
         if not transactions:
+            print("DEBUG: Final transaction list is empty")
             raise ValueError("No valid transactions found in PDF")
         
         return transactions
@@ -552,10 +566,12 @@ def auto_categorize_transaction(merchant: str, db: Session, user_id: int) -> Opt
     
     return None
 
-@router.post("/upload", response_model=ImportJobResponse)
+@router.post("/upload", response_model=UploadResponse)
 async def upload_statement(
     file: UploadFile = File(...),
     account_id: Optional[int] = None,
+    bank_name: Optional[str] = None,
+    card_last_four: Optional[str] = None,
     statement_period: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -581,6 +597,7 @@ async def upload_statement(
     db.commit()
     db.refresh(import_job)
     
+    created_transactions = []
     try:
         content = await file.read()
         if is_csv:
@@ -604,11 +621,14 @@ async def upload_statement(
                 amount=t_data['amount'],
                 merchant=t_data['merchant'],
                 description=t_data.get('description'),
+                bank_name=bank_name,
+                card_last_four=card_last_four,
                 category_id=category_id,
                 source=source,
                 status=TransactionStatus.PENDING
             )
             db.add(transaction)
+            created_transactions.append(transaction)
             import_job.processed_transactions += 1
             
         import_job.status = ImportJobStatus.COMPLETED
@@ -622,7 +642,13 @@ async def upload_statement(
         raise HTTPException(status_code=400, detail=f"Import failed: {str(e)}")
         
     db.refresh(import_job)
-    return import_job
+    for t in created_transactions:
+        db.refresh(t)
+        
+    return {
+        "import_job": import_job,
+        "transactions": created_transactions
+    }
 
 @router.get("/", response_model=List[ImportJobResponse])
 def get_import_jobs(

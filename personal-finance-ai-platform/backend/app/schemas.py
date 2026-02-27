@@ -223,3 +223,7 @@ class ImportJobResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+class UploadResponse(BaseModel):
+    import_job: ImportJobResponse
+    transactions: List[TransactionResponse]
