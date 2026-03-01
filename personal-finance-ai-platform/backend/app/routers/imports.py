@@ -1,571 +1,215 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import and_
 from app.database import get_db
-from app.models import Transaction, User, Category, MerchantRule, Account, ImportJob, ImportJobStatus, TransactionSource, TransactionStatus
+from app.models import (
+    Transaction, User, ImportJob,
+    ImportJobStatus, TransactionSource, TransactionStatus
+)
 from app.schemas import TransactionResponse, ImportJobResponse, UploadResponse
 from app.auth import get_current_user
 import pdfplumber
-import csv
 import io
 from datetime import datetime
 import re
 
 router = APIRouter()
 
-def _value_present(val) -> bool:
-    """Return True if value is not None and not empty (replaces pd.notna for strings)."""
-    if val is None:
-        return False
-    return str(val).strip() != ""
 
-def _parse_amount(amount_str: str, handle_suffix: bool = True) -> float:
-    """Parse amount string, optionally handling Dr/Cr suffixes and currency symbols.
-    
-    Handles both CSV formats ("$1,200.50") and PDF formats ("50.00 Cr", "500.00 Dr").
-    
-    Args:
-        amount_str: Raw amount string from file
-        handle_suffix: If True, handles Dr/Cr suffixes; if False, just removes currency symbols
-        
-    Returns:
-        Parsed float value (always positive)
-    """
-    if not amount_str or not str(amount_str).strip():
-        return 0.0
-    
-    cleaned = str(amount_str).strip().replace('\n', ' ').strip()
-    is_negative = False
-    
-    if handle_suffix:
-        cleaned_lower = cleaned.lower()
-        if 'dr' in cleaned_lower:
-            is_negative = True
-            cleaned = re.sub(r'\s*dr\s*', '', cleaned, flags=re.IGNORECASE)
-        elif 'cr' in cleaned_lower:
-            cleaned = re.sub(r'\s*cr\s*', '', cleaned, flags=re.IGNORECASE)
-    
-    if cleaned.lstrip().startswith('-'):
-        is_negative = True
-    
-    sanitized = re.sub(r'[^\d.-]', '', cleaned.strip())
-    
-    if not sanitized or sanitized == '-':
-        return 0.0
-    
-    try:
-        amount = float(sanitized)
-        return abs(amount)
-    except ValueError:
-        return 0.0
-
-
-def _parse_date(date_str: str) -> Optional[datetime]:
-    """Parse date string with multiple format support.
-    
-    Tries common date formats used in bank statements.
-    
-    Args:
-        date_str: Raw date string from file
-        
-    Returns:
-        Parsed datetime object or None if parsing fails
-    """
-    if not date_str or not str(date_str).strip():
+# =========================
+# DATE PARSER
+# =========================
+def _parse_date(date_str: str):
+    if not date_str:
         return None
-    
-    cleaned = str(date_str).replace('\n', ' ').strip()
-    
-    date_formats = [
-        "%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%Y-%m-%d %H:%M:%S",
-        "%d-%m-%Y", "%m-%d-%Y", "%d %b %Y", "%Y/%m/%d", "%d.%m.%Y",
-        "%d %b", "%d-%b", "%d/%m"
+
+    cleaned = str(date_str).replace("\n", " ").strip()
+
+    formats = [
+        "%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y",
+        "%d %b %Y", "%d.%m.%Y", "%d.%m.%y",
+        "%d %b", "%d/%m"
     ]
-    
-    for fmt in date_formats:
+
+    for f in formats:
         try:
-            return datetime.strptime(cleaned, fmt)
-        except ValueError:
+            return datetime.strptime(cleaned, f)
+        except:
             continue
-    
+
     return None
 
 
-def _detect_header_row(lines: List[str], max_lines: int = 20) -> int:
-    """Detect the actual CSV header row by finding one that contains both 'date' and 'amount'.
-    
-    Skips account balance headers and other metadata often found in downloaded statements.
-    
-    Args:
-        lines: List of CSV lines
-        max_lines: Maximum number of lines to check before giving up
-        
-    Returns:
-        Index of the header row
-        
-    Raises:
-        ValueError: If no valid header row is found
-    """
-    for idx, line in enumerate(lines[:max_lines]):
-        reader = csv.DictReader(io.StringIO(line))
-        if reader.fieldnames:
-            headers_lower = [h.lower() for h in reader.fieldnames]
-            has_date = any('date' in h for h in headers_lower)
-            has_amount = any('amount' in h for h in headers_lower)
-            
-            if has_date and has_amount:
-                return idx
-    
-    raise ValueError("Could not find valid CSV header with 'date' and 'amount' columns")
+# =========================
+# AMOUNT PARSER
+# =========================
+def _parse_amount(val: str) -> float:
+    if not val:
+        return 0.0
 
+    val = str(val).strip()
 
-def parse_csv(file_content: bytes) -> List[dict]:
-    """Parse CSV file and extract transactions with robust header detection and encoding.
-    
-    Features:
-    - Smart encoding detection (UTF-8 with fallback to Latin-1)
-    - Header detection logic: scans first 20 lines for actual headers
-    - Handles account statements with metadata headers
-    - Currency sanitization: removes symbols, commas, normalizes format
-    - Empty row handling: skips rows with all empty values
-    - Multiple date/amount/merchant column name variations
-    
-    Args:
-        file_content: Raw file bytes
-        
-    Returns:
-        List of parsed transaction dictionaries
-        
-    Raises:
-        HTTPException: If parsing fails
-    """
+    # Citi negative brackets
+    if "(" in val and ")" in val:
+        val = "-" + val.replace("(", "").replace(")", "")
+
+    val = re.sub(r"[^\d\.-]", "", val)
+
     try:
-        # SMART ENCODING: Try UTF-8 first, fall back to Latin-1
-        try:
-            text = file_content.decode("utf-8")
-        except UnicodeDecodeError:
-            text = file_content.decode("latin-1")
-        
-        lines = text.strip().split('\n')
-        if not lines:
-            raise ValueError("CSV file is empty")
-        
-        # HEADER DETECTION: Find actual header row
-        header_idx = _detect_header_row(lines)
-        
-        # Re-parse CSV starting from detected header
-        csv_text = '\n'.join(lines[header_idx:])
-        reader = csv.DictReader(io.StringIO(csv_text))
-        rows = list(reader)
-        
-        if not rows:
-            raise ValueError("No data rows found in CSV after header")
-        
-        columns = list(rows[0].keys())
-        transactions = []
-        
-        # Column name variations to search for
-        date_cols = ["date", "transaction_date", "Date", "Transaction Date", "Date Time", "datetime"]
-        amount_cols = ["amount", "Amount", "transaction_amount", "Transaction Amount", "value", "Value"]
-        merchant_cols = ["merchant", "Merchant", "description", "Description", "vendor", "Vendor", "details", "Details"]
-        desc_cols = ["description", "Description", "details", "Details", "narration", "Narration", "memo", "Memo"]
-        
-        # Find matching columns (case-insensitive)
-        date_col = next((c for c in columns for dc in date_cols if dc.lower() == c.lower()), None)
-        amount_col = next((c for c in columns for ac in amount_cols if ac.lower() == c.lower()), None)
-        merchant_col = next((c for c in columns for mc in merchant_cols if mc.lower() == c.lower()), None)
-        desc_col = next((c for c in columns for dc in desc_cols if dc.lower() == c.lower()), None)
-        
-        if not date_col or not amount_col or not merchant_col:
-            raise ValueError(f"Required columns not found. Found: {columns}")
-        
-        for row in rows:
-            # EMPTY ROW HANDLING: Skip rows where all values are empty/None
-            if not any(row.values()):
-                continue
-            
-            try:
-                date_str = str(row.get(date_col, "")).strip()
-                merchant = str(row.get(merchant_col, "")).strip()
-                
-                # Skip rows with empty required fields
-                if not date_str or not merchant:
-                    continue
-                
-                # Use unified amount parser
-                amount_str = str(row.get(amount_col, "0")).strip()
-                amount = _parse_amount(amount_str, handle_suffix=False)
-                
-                # Parse description if available
-                description = None
-                if desc_col and _value_present(row.get(desc_col)):
-                    description = str(row[desc_col]).strip()
-                
-                # Use unified date parser
-                date = _parse_date(date_str)
-                
-                if date and merchant and amount > 0:
-                    transactions.append({
-                        "date": date,
-                        "amount": abs(amount),
-                        "merchant": merchant,
-                        "description": description,
-                    })
-            except (ValueError, TypeError, KeyError) as e:
-                # Log and continue with next row
-                continue
-        
-        if not transactions:
-            raise ValueError("No valid transactions found in CSV")
-        
-        return transactions
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error parsing CSV: {str(e)}")
-
-def _find_header_indices(header_row: List[str]) -> dict:
-    """Dynamically discover column indices from header row.
-    
-    Scans header row for keywords like "Date", "Amount", "Description", "Particulars".
-    Works with different PDF statement layouts without hardcoding column positions.
-    
-    Args:
-        header_row: First row of PDF table (assumed to be headers)
-        
-    Returns:
-        Dictionary mapping field names to column indices
-        E.g., {'date': 0, 'amount': 2, 'merchant': 1}
-        
-    Raises:
-        ValueError: If required columns (date/amount) not found
-    """
-    indices = {}
-    
-    date_keywords = ['date', 'transaction date', 'posting date', 'posted', 'trans date', 'date of trans']
-    amount_keywords = ['amount', 'debit', 'credit', 'value', 'transaction amount', 'amt', 'amount (sgd)', 'amount(sgd)']
-    merchant_keywords = ['description', 'particulars', 'merchant', 'details', 'narration', 'remarks']
-    
-    header_lower = [str(h).lower().replace('\n', ' ').strip() for h in header_row if h]
-    
-    # Find date column
-    for idx, header in enumerate(header_lower):
-        if any(kw in header for kw in date_keywords):
-            indices['date'] = idx
-            break
-    
-    # Find amount column
-    for idx, header in enumerate(header_lower):
-        if any(kw in header for kw in amount_keywords):
-            indices['amount'] = idx
-            break
-    
-    # Find merchant/description column (optional)
-    for idx, header in enumerate(header_lower):
-        if any(kw in header for kw in merchant_keywords):
-            indices['merchant'] = idx
-            break
-    
-    # If no merchant column found, use column after date or second column
-    if 'merchant' not in indices:
-        # Avoid using the amount column as merchant
-        amount_idx = indices.get('amount')
-        date_idx = indices.get('date', 0)
-        potential_merchant_idx = date_idx + 1 if date_idx + 1 < len(header_lower) else 1
-        if potential_merchant_idx == amount_idx:
-             potential_merchant_idx = 1 if amount_idx != 1 else 0
-        indices['merchant'] = potential_merchant_idx
-    
-    # Validate required columns
-    if 'date' not in indices or 'amount' not in indices:
-        raise ValueError(f"Could not find required columns (date/amount) in PDF header. Found: {header_lower}")
-    
-    return indices
-
-
-def _parse_amount_with_suffix(amount_str: str) -> float:
-    """Parse amount string that may have Dr/Cr suffix or currency symbols.
-    
-    Handles formats like:
-    - "50.00"
-    - "$1,200.50"
-    - "50.00 Cr"
-    - "500.00 Dr"
-    - "€1.200,50"
-    - "-500"
-    
-    Args:
-        amount_str: Raw amount string from PDF
-        
-    Returns:
-        Parsed float value
-        
-    Raises:
-        ValueError: If amount cannot be parsed
-    """
-    if not amount_str or not str(amount_str).strip():
-        return 0.0
-    
-    cleaned = str(amount_str).strip()
-    
-    # Remove newlines (PDF tables often have them)
-    cleaned = cleaned.replace('\n', ' ').strip()
-    
-    # Check for Dr/Cr suffixes and track if negative
-    is_negative = False
-    cleaned_lower = cleaned.lower()
-    
-    if 'dr' in cleaned_lower:
-        # Debit - typically negative
-        is_negative = True
-        cleaned = re.sub(r'\s*dr\s*', '', cleaned, flags=re.IGNORECASE)
-    elif 'cr' in cleaned_lower:
-        # Credit - typically positive
-        cleaned = re.sub(r'\s*cr\s*', '', cleaned, flags=re.IGNORECASE)
-    
-    # Check for negative sign
-    if cleaned.lstrip().startswith('-'):
-        is_negative = True
-    
-    # Remove all non-numeric characters except dot and minus
-    sanitized = re.sub(r'[^\d.-]', '', cleaned.strip())
-    
-    if not sanitized or sanitized == '-':
-        return 0.0
-    
-    try:
-        amount = float(sanitized)
-        # Apply negative flag if detected
-        if is_negative:
-            amount = abs(amount)
-        return amount
-    except ValueError:
+        return abs(float(val))
+    except:
         return 0.0
 
 
-def _parse_text_fallback(text: str) -> List[dict]:
-    """Fallback parser that uses regex to identify transactions in raw text.
-    
-    This is useful for PDFs where table borders are missing and extract_tables fails.
-    Identifies patterns like "01/12/2025 STARBUCKS SINGAPORE 7.80"
-    
-    Args:
-        text: Raw text from PDF page
-        
-    Returns:
-        List of parsed transaction dictionaries
-    """
+# =========================
+# VALIDATION
+# =========================
+def _is_valid_transaction(date, merchant, amount):
+    if not date or not merchant:
+        return False
+
+    merchant_lower = merchant.lower().strip()
+
+    invalid_keywords = [
+        "opening balance", "closing balance",
+        "new credits", "new debits",
+        "minimum payment", "credit limit",
+        "statement", "summary", "balance",
+        "total", "available credit",
+        "payment received", "auto payment",
+        "amount due"
+    ]
+
+    if any(k in merchant_lower for k in invalid_keywords):
+        return False
+
+    # Remove large system payments
+    if amount > 5000 and len(merchant_lower) < 10:
+        return False
+
+    if len(merchant_lower) < 3:
+        return False
+
+    if re.fullmatch(r"\d+", merchant_lower):
+        return False
+
+    if amount <= 0:
+        return False
+
+    return True
+
+
+# =========================
+# TEXT PARSER (AMEX / CITI)
+# =========================
+def _parse_text(text: str):
     transactions = []
-    
-    # Pattern: Date (various formats) + Merchant (text) + Amount (decimal with optional commas)
-    # Date: Matches DD/MM/YYYY, DD-MM-YYYY, DD MMM YYYY, etc.
-    # Amount: Matches 123.45, 1,234.56, -123.45
-    date_pattern = r'(\d{1,2}[/\s-](?:\d{1,2}|[A-Za-z]{3,9})[/\s-]\d{2,4})'
-    amount_pattern = r'(-?[\d,]+\.\d{2})'
-    pattern = date_pattern + r'\s+(.+?)\s+' + amount_pattern
-    
-    print(f"DEBUG: Running fallback regex on text (length: {len(text)})")
-    matches = re.finditer(pattern, text)
-    count = 0
-    for match in matches:
-        date_str, merchant, amount_str = match.groups()
-        print(f"DEBUG: Found match candidate: {date_str} | {merchant} | {amount_str}")
-        
-        # Parse date
+
+    date_pattern = r'(\d{1,2}[/\s.-](?:\d{1,2}|[A-Za-z]{3,9})[/\s.-]\d{2,4})'
+    amount_pattern = r'(\(?-?[\d,]+\.\d{2}\)?)'
+    pattern = date_pattern + r"\s+(.+?)\s+" + amount_pattern
+
+    for m in re.finditer(pattern, text):
+        date_str, merchant, amt = m.groups()
+
+        if "FOREIGN AMOUNT" in merchant.upper():
+            continue
+
         date = _parse_date(date_str)
-        if not date:
-            print(f"DEBUG: Date parsing failed for: {date_str}")
-            continue
-            
-        # Parse amount
-        try:
-            amount = float(amount_str.replace(',', ''))
-            if amount == 0.0:
-                continue
-                
+        amount = _parse_amount(amt)
+
+        merchant = merchant.strip()
+
+        if _is_valid_transaction(date, merchant, amount):
             transactions.append({
-                'date': date,
-                'amount': abs(amount),
-                'merchant': merchant.strip(),
-                'description': None
+                "date": date,
+                "amount": amount,
+                "merchant": merchant,
+                "description": None
             })
-            count += 1
-        except ValueError:
-            print(f"DEBUG: Amount parsing failed for: {amount_str}")
-            continue
-            
-    print(f"DEBUG: Fallback parsed {count} transactions")
+
+    # AMEX column fallback
+    if not transactions:
+        amounts = re.findall(r"\d{1,3}(?:,\d{3})*\.\d{2}", text)
+        txns = re.findall(r"(\d{2}\.\d{2}\.\d{2})\s+([A-Z0-9\*\'\-\s]+)", text)
+
+        for i in range(min(len(amounts), len(txns))):
+            d, m = txns[i]
+            date = _parse_date(d)
+            amount = _parse_amount(amounts[i])
+
+            if _is_valid_transaction(date, m, amount):
+                transactions.append({
+                    "date": date,
+                    "amount": amount,
+                    "merchant": m.strip(),
+                    "description": None
+                })
+
     return transactions
 
 
-def parse_pdf(file_content: bytes) -> List[dict]:
-    """Parse PDF file and extract transactions with dynamic header detection and text fallback.
-    
-    Features:
-    - Dynamic header discovery: Scans first few rows for column names
-    - Works with different PDF layouts without hardcoding positions
-    - Handles "dirty" PDF text: removes newlines from cells
-    - Advanced amount parsing: Handles Dr/Cr suffixes, currency symbols
-    - Skips total rows: Ignores summary rows at end of statements
-    - Multiple date format support
-    - TEXT FALLBACK: Uses regex if table extraction fails
-    
-    Args:
-        file_content: Raw PDF file bytes
-        
-    Returns:
-        List of parsed transaction dictionaries
-        
-    Raises:
-        HTTPException: If parsing fails
-    """
-    transactions = []
-    try:
-        with pdfplumber.open(io.BytesIO(file_content)) as pdf:
-            for page_num, page in enumerate(pdf.pages):
-                page_transactions = []
-                
-                # 1. TRY TABLE EXTRACTION FIRST
-                tables = page.extract_tables()
-                if tables:
-                    for table_num, table in enumerate(tables):
-                        if not table or len(table) < 2:
+# =========================
+# PDF PARSER (ALL PAGES FIXED)
+# =========================
+def parse_pdf(content: bytes):
+    all_transactions = []
+
+    with pdfplumber.open(io.BytesIO(content)) as pdf:
+
+        for i, page in enumerate(pdf.pages):
+
+            page_transactions = []
+
+            # ---- TABLE FIRST ----
+            tables = page.extract_tables()
+
+            if tables:
+                for table in tables:
+                    for row in table[1:]:
+                        if not row:
                             continue
-                        
-                        try:
-                            # DYNAMIC HEADER DISCOVERY: Find column indices from header
-                            header_indices = _find_header_indices(table[0])
-                            date_col = header_indices['date']
-                            amount_col = header_indices['amount']
-                            merchant_col = header_indices['merchant']
-                            
-                            # Process data rows (skip header at index 0)
-                            for row_num, row in enumerate(table[1:], 1):
-                                if not row or len(row) <= max(date_col, amount_col, merchant_col):
-                                    continue
-                                
-                                # Get raw cell values and clean newlines
-                                date_str = str(row[date_col]).replace('\n', ' ').strip() if row[date_col] else ""
-                                merchant = str(row[merchant_col]).replace('\n', ' ').strip() if row[merchant_col] else ""
-                                amount_str = str(row[amount_col]).replace('\n', ' ').strip() if row[amount_col] else ""
-                                
-                                # IGNORE TOTAL ROWS: Skip rows that start with "Total"
-                                if any(keyword in str(row[0]).lower() for keyword in ['total', 'subtotal', 'balance']):
-                                    continue
-                                
-                                # Skip empty required fields
-                                if not date_str or not merchant or not amount_str:
-                                    continue
-                                
-                                # ADVANCED AMOUNT CLEANING: Handle Dr/Cr suffixes
-                                amount = _parse_amount_with_suffix(amount_str)
-                                if amount == 0.0:
-                                    continue
-                                
-                                date = _parse_date(date_str)
-                                
-                                # Only add if we successfully parsed date and have merchant
-                                if date and merchant:
-                                    page_transactions.append({
-                                        'date': date,
-                                        'amount': abs(amount),
-                                        'merchant': merchant,
-                                        'description': None
-                                    })
-                        except (ValueError, IndexError):
-                            # Skip this table if header detection fails
-                            continue
-                
-                # 2. FALLBACK: IF NO TRANSACTIONS FOUND IN TABLES, TRY TEXT PARSING
-                if not page_transactions:
-                    print(f"DEBUG: No transactions in tables for Page {page_num+1}, trying fallback")
-                    text = page.extract_text()
-                    if text:
-                        page_transactions = _parse_text_fallback(text)
-                    else:
-                        print(f"DEBUG: No text extracted for Page {page_num+1}")
-                
-                transactions.extend(page_transactions)
-        
-        if not transactions:
-            print("DEBUG: Final transaction list is empty")
-            raise ValueError("No valid transactions found in PDF")
-        
-        return transactions
-    
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error parsing PDF: {str(e)}")
 
-def _preprocess_merchant(merchant: str) -> str:
-    """Preprocess merchant name for better matching.
-    
-    - Strips whitespace
-    - Converts to lowercase
-    - Removes special characters
-    - Normalizes spaces
-    
-    Args:
-        merchant: Raw merchant name
-        
-    Returns:
-        Cleaned merchant name
-    """
-    if not merchant or not isinstance(merchant, str):
-        return ""
-    
-    # Strip and convert to lowercase
-    cleaned = merchant.strip().lower()
-    
-    # Normalize spaces (remove extra whitespace)
-    cleaned = ' '.join(cleaned.split())
-    
-    # Remove special characters, keep only alphanumeric and spaces
-    cleaned = re.sub(r'[^a-z0-9\s]', '', cleaned)
-    
-    return cleaned
+                        row = [str(x).strip() if x else "" for x in row]
+
+                        date = _parse_date(row[0])
+
+                        merchant = " ".join(
+                            [x for x in row[1:-2] if x]
+                        ).strip()
+
+                        amount = (
+                            _parse_amount(row[-2])
+                            or _parse_amount(row[-3])
+                        )
+
+                        if _is_valid_transaction(date, merchant, amount):
+                            page_transactions.append({
+                                "date": date,
+                                "amount": amount,
+                                "merchant": merchant,
+                                "description": None
+                            })
+
+            # ---- FALLBACK PER PAGE ----
+            if not page_transactions:
+                text = page.extract_text()
+                if text:
+                    page_transactions.extend(_parse_text(text))
+
+            print(f"Page {i+1}: {len(page_transactions)} transactions found")
+
+            all_transactions.extend(page_transactions)
+
+    if not all_transactions:
+        raise ValueError("No valid transactions found")
+
+    return all_transactions
 
 
-def auto_categorize_transaction(merchant: str, db: Session, user_id: int) -> Optional[int]:
-    """Auto-categorize transaction using merchant rules with preprocessing and optimization.
-    
-    Strategy:
-    1. Preprocesses merchant input (strips, lowercases, removes special chars)
-    2. Checks user-defined merchant rules first
-    3. Uses keyword dictionary map for pattern matching
-    4. Optimizes by fetching all categories in one query instead of multiple queries
-    
-    Args:
-        merchant: Raw merchant name from transaction
-        db: Database session
-        user_id: User ID for filtering categories and rules
-        
-    Returns:
-        Category ID if matched, None otherwise
-    """
-    
-    # 1. PREPROCESSING: Clean the input
-    merchant_cleaned = _preprocess_merchant(merchant)
-    
-    if not merchant_cleaned:
-        return None
-    
-    # 2. Check merchant rules first (user-defined patterns have priority)
-    rules = db.query(MerchantRule).filter(
-        MerchantRule.user_id == user_id,
-        MerchantRule.is_active == True
-    ).all()
-    
-    for rule in rules:
-        if rule.match_type == 'exact':
-            if rule.merchant_pattern.lower() == merchant.lower():
-                return rule.category_id
-        else:  # partial match (default)
-            if rule.merchant_pattern.lower() in merchant.lower():
-                return rule.category_id
-    
-    return None
-
+# =========================
+# UPLOAD API
+# =========================
 @router.post("/upload", response_model=UploadResponse)
 async def upload_statement(
     file: UploadFile = File(...),
@@ -576,186 +220,93 @@ async def upload_statement(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Upload a bank statement (CSV/PDF) and create an import job"""
-    
-    is_csv = file.filename.endswith('.csv')
-    is_pdf = file.filename.endswith('.pdf')
-    
-    if not is_csv and not is_pdf:
-        raise HTTPException(status_code=400, detail="File must be a CSV or PDF")
-    
-    # Create ImportJob
+
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(400, "Only PDF supported")
+
     import_job = ImportJob(
         user_id=current_user.id,
         account_id=account_id,
         filename=file.filename,
-        file_type='csv' if is_csv else 'pdf',
+        file_type="pdf",
         status=ImportJobStatus.PROCESSING,
         statement_period=statement_period
     )
+
     db.add(import_job)
     db.commit()
     db.refresh(import_job)
-    
+
     created_transactions = []
+
     try:
         content = await file.read()
-        if is_csv:
-            transactions_data = parse_csv(content)
-            source = TransactionSource.IMPORTED_CSV
-        else:
-            transactions_data = parse_pdf(content)
-            source = TransactionSource.IMPORTED_PDF
-            
-        import_job.total_transactions = len(transactions_data)
-        import_job.total_amount = sum(t['amount'] for t in transactions_data)
-        
-        # Create transactions in PENDING status
-        for t_data in transactions_data:
-            category_id = auto_categorize_transaction(t_data['merchant'], db, current_user.id)
-            
-            transaction = Transaction(
+        parsed = parse_pdf(content)
+
+        import_job.total_transactions = len(parsed)
+
+        for t in parsed:
+
+            # Duplicate detection
+            existing = db.query(Transaction).filter(
+                Transaction.user_id == current_user.id,
+                Transaction.date == t["date"],
+                Transaction.amount == t["amount"],
+                Transaction.merchant == t["merchant"]
+            ).first()
+
+            if existing:
+                continue
+
+            txn = Transaction(
                 user_id=current_user.id,
                 account_id=account_id,
                 import_job_id=import_job.id,
-                date=t_data['date'],
-                amount=t_data['amount'],
-                merchant=t_data['merchant'],
-                description=t_data.get('description'),
+                date=t["date"],
+                amount=t["amount"],
+                merchant=t["merchant"],
+                description=t.get("description"),
                 bank_name=bank_name,
                 card_last_four=card_last_four,
-                category_id=category_id,
-                source=source,
+                source=TransactionSource.IMPORTED_PDF,
                 status=TransactionStatus.PENDING
             )
-            db.add(transaction)
-            created_transactions.append(transaction)
-            import_job.processed_transactions += 1
-            
+
+            db.add(txn)
+            created_transactions.append(txn)
+
         import_job.status = ImportJobStatus.COMPLETED
         import_job.completed_at = datetime.now()
+
         db.commit()
-        
+
+        for t in created_transactions:
+            db.refresh(t)
+
     except Exception as e:
         import_job.status = ImportJobStatus.FAILED
         import_job.error_message = str(e)
         db.commit()
-        raise HTTPException(status_code=400, detail=f"Import failed: {str(e)}")
-        
-    db.refresh(import_job)
-    for t in created_transactions:
-        db.refresh(t)
-        
+        raise HTTPException(400, f"Import failed: {str(e)}")
+
     return {
         "import_job": import_job,
         "transactions": created_transactions
     }
 
+
+# =========================
+# IMPORT HISTORY
+# =========================
 @router.get("/", response_model=List[ImportJobResponse])
 def get_import_jobs(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """List all import jobs for the current user"""
-    return db.query(ImportJob).filter(ImportJob.user_id == current_user.id).order_by(ImportJob.created_at.desc()).all()
+    return (
+        db.query(ImportJob)
+        .filter(ImportJob.user_id == current_user.id)
+        .order_by(ImportJob.created_at.desc())
+        .all()
+    )
 
-@router.get("/{job_id}", response_model=ImportJobResponse)
-def get_import_job(
-    job_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get details for a specific import job"""
-    job = db.query(ImportJob).filter(
-        and_(ImportJob.id == job_id, ImportJob.user_id == current_user.id)
-    ).first()
-    
-    if not job:
-        raise HTTPException(status_code=404, detail="Import job not found")
-        
-    return job
-
-@router.get("/{job_id}/transactions", response_model=List[TransactionResponse])
-def get_import_job_transactions(
-    job_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get transactions associated with an import job"""
-    job = db.query(ImportJob).filter(
-        and_(ImportJob.id == job_id, ImportJob.user_id == current_user.id)
-    ).first()
-    
-    if not job:
-        raise HTTPException(status_code=404, detail="Import job not found")
-        
-    transactions = db.query(Transaction).filter(Transaction.import_job_id == job_id).all()
-    
-    # Map to schema correctly (handling relationships)
-    result = []
-    for t in transactions:
-        result.append(TransactionResponse(
-            id=t.id,
-            date=t.date,
-            amount=t.amount,
-            merchant=t.merchant,
-            description=t.description,
-            transaction_type=t.transaction_type,
-            status=t.status,
-            bank_name=t.bank_name,
-            card_last_four=t.card_last_four,
-            category_id=t.category_id,
-            category_name=t.category.name if t.category else None,
-            account_id=t.account_id,
-            account_name=t.account.name if t.account else None,
-            import_job_id=t.import_job_id,
-            source=t.source,
-            is_anomaly=t.is_anomaly,
-            anomaly_score=t.anomaly_score
-        ))
-    return result
-
-@router.post("/{job_id}/confirm")
-def confirm_import_job(
-    job_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Confirm and process all transactions in an import job"""
-    job = db.query(ImportJob).filter(
-        and_(ImportJob.id == job_id, ImportJob.user_id == current_user.id)
-    ).first()
-    
-    if not job:
-        raise HTTPException(status_code=404, detail="Import job not found")
-        
-    # Update all pending transactions in this job to PROCESSED
-    db.query(Transaction).filter(
-        and_(Transaction.import_job_id == job_id, Transaction.status == TransactionStatus.PENDING)
-    ).update({"status": TransactionStatus.PROCESSED})
-    
-    db.commit()
-    return {"message": f"Successfully confirmed transactions for import job {job_id}"}
-
-@router.delete("/{job_id}")
-def delete_import_job(
-    job_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Delete an import job and its pending transactions"""
-    job = db.query(ImportJob).filter(
-        and_(ImportJob.id == job_id, ImportJob.user_id == current_user.id)
-    ).first()
-    
-    if not job:
-        raise HTTPException(status_code=404, detail="Import job not found")
-        
-    # Delete transactions that are still PENDING
-    db.query(Transaction).filter(
-        and_(Transaction.import_job_id == job_id, Transaction.status == TransactionStatus.PENDING)
-    ).delete()
-    
-    db.delete(job)
-    db.commit()
-    return {"message": "Import job and pending transactions deleted"}
