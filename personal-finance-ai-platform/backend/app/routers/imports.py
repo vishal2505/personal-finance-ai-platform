@@ -12,6 +12,7 @@ import pdfplumber
 import io
 from datetime import datetime
 import re
+import csv
 
 router = APIRouter()
 
@@ -49,7 +50,6 @@ def _parse_amount(val: str) -> float:
 
     val = str(val).strip()
 
-    # Citi negative brackets
     if "(" in val and ")" in val:
         val = "-" + val.replace("(", "").replace(")", "")
 
@@ -65,6 +65,7 @@ def _parse_amount(val: str) -> float:
 # VALIDATION
 # =========================
 def _is_valid_transaction(date, merchant, amount):
+
     if not date or not merchant:
         return False
 
@@ -83,7 +84,6 @@ def _is_valid_transaction(date, merchant, amount):
     if any(k in merchant_lower for k in invalid_keywords):
         return False
 
-    # Remove large system payments
     if amount > 5000 and len(merchant_lower) < 10:
         return False
 
@@ -103,6 +103,7 @@ def _is_valid_transaction(date, merchant, amount):
 # TEXT PARSER (AMEX / CITI)
 # =========================
 def _parse_text(text: str):
+
     transactions = []
 
     date_pattern = r'(\d{1,2}[/\s.-](?:\d{1,2}|[A-Za-z]{3,9})[/\s.-]\d{2,4})'
@@ -110,6 +111,7 @@ def _parse_text(text: str):
     pattern = date_pattern + r"\s+(.+?)\s+" + amount_pattern
 
     for m in re.finditer(pattern, text):
+
         date_str, merchant, amt = m.groups()
 
         if "FOREIGN AMOUNT" in merchant.upper():
@@ -128,13 +130,14 @@ def _parse_text(text: str):
                 "description": None
             })
 
-    # AMEX column fallback
     if not transactions:
+
         amounts = re.findall(r"\d{1,3}(?:,\d{3})*\.\d{2}", text)
         txns = re.findall(r"(\d{2}\.\d{2}\.\d{2})\s+([A-Z0-9\*\'\-\s]+)", text)
 
         for i in range(min(len(amounts), len(txns))):
             d, m = txns[i]
+
             date = _parse_date(d)
             amount = _parse_amount(amounts[i])
 
@@ -150,9 +153,10 @@ def _parse_text(text: str):
 
 
 # =========================
-# PDF PARSER (ALL PAGES FIXED)
+# PDF PARSER (UNCHANGED)
 # =========================
 def parse_pdf(content: bytes):
+
     all_transactions = []
 
     with pdfplumber.open(io.BytesIO(content)) as pdf:
@@ -161,12 +165,12 @@ def parse_pdf(content: bytes):
 
             page_transactions = []
 
-            # ---- TABLE FIRST ----
             tables = page.extract_tables()
 
             if tables:
                 for table in tables:
                     for row in table[1:]:
+
                         if not row:
                             continue
 
@@ -184,6 +188,7 @@ def parse_pdf(content: bytes):
                         )
 
                         if _is_valid_transaction(date, merchant, amount):
+
                             page_transactions.append({
                                 "date": date,
                                 "amount": amount,
@@ -191,9 +196,10 @@ def parse_pdf(content: bytes):
                                 "description": None
                             })
 
-            # ---- FALLBACK PER PAGE ----
             if not page_transactions:
+
                 text = page.extract_text()
+
                 if text:
                     page_transactions.extend(_parse_text(text))
 
@@ -206,6 +212,131 @@ def parse_pdf(content: bytes):
 
     return all_transactions
 
+
+# =========================
+# CSV PARSER (NEW)
+# =========================
+def parse_csv(content: bytes):
+
+    transactions = []
+
+    decoded = content.decode("utf-8", errors="ignore")
+
+    reader = csv.reader(io.StringIO(decoded))
+
+    header = None
+    start_index = 0
+
+    # Detect transaction header row
+    for i, row in enumerate(reader):
+
+        lower = [str(c).strip().lower() for c in row]
+
+        if any(x in lower for x in [
+            "date",
+            "transaction date",
+            "posting date",
+            "value date"
+        ]):
+            header = lower
+            start_index = i
+            break
+
+    if not header:
+        raise ValueError("Could not detect CSV transaction header")
+
+    print("\n========== CSV IMPORT DEBUG ==========")
+    print("Detected Header:", header)
+
+    # Re-read file and skip rows before header
+    reader = csv.DictReader(
+        io.StringIO(decoded),
+        fieldnames=header
+    )
+
+    for i, row in enumerate(reader):
+
+        if i <= start_index:
+            continue
+
+        # Normalize keys
+        row = {k.lower(): v for k, v in row.items() if k}
+
+        print("\nRow:", row)
+
+        # Date detection
+        date_raw = (
+            row.get("date")
+            or row.get("transaction date")
+            or row.get("posting date")
+            or row.get("value date")
+        )
+
+        # Merchant detection
+        merchant_raw = (
+            row.get("merchant")
+            or row.get("description")
+            or row.get("details")
+            or row.get("narration")
+            or row.get("transaction ref1")
+            or ""
+        )
+
+        # Amount detection (supports DBS/POSB)
+        debit = row.get("debit amount") or row.get("debit")
+        credit = row.get("credit amount") or row.get("credit")
+
+        amount_raw = debit if debit else credit
+
+        if not amount_raw:
+            amount_raw = row.get("amount")
+
+        print("Raw Date:", date_raw)
+        print("Raw Merchant:", merchant_raw)
+        print("Raw Amount:", amount_raw)
+
+        date = _parse_date(date_raw)
+        amount = _parse_amount(amount_raw)
+        merchant = str(merchant_raw).strip()
+
+        print("Parsed Date:", date)
+        print("Parsed Amount:", amount)
+        print("Parsed Merchant:", merchant)
+
+        if not date:
+            print("❌ Skipped: Invalid date")
+            continue
+
+        if not merchant:
+            print("❌ Skipped: Missing merchant")
+            continue
+
+        if amount <= 0:
+            print("❌ Skipped: Invalid amount")
+            continue
+
+        if not _is_valid_transaction(date, merchant, amount):
+            print("❌ Skipped: Failed validation rules")
+            continue
+
+        txn = {
+            "date": date,
+            "amount": amount,
+            "merchant": merchant,
+            "description": row.get("description")
+        }
+
+        print("✅ Accepted:", txn)
+
+        transactions.append(txn)
+
+    print("\nTotal Transactions Parsed:", len(transactions))
+    print("=====================================\n")
+
+    if not transactions:
+        raise ValueError("No valid transactions found in CSV")
+
+    return transactions
 
 # =========================
 # UPLOAD API
@@ -221,14 +352,16 @@ async def upload_statement(
     db: Session = Depends(get_db)
 ):
 
-    if not file.filename.endswith(".pdf"):
-        raise HTTPException(400, "Only PDF supported")
+    if not (file.filename.endswith(".pdf") or file.filename.endswith(".csv")):
+        raise HTTPException(400, "Only PDF or CSV supported")
+
+    file_type = file.filename.split(".")[-1]
 
     import_job = ImportJob(
         user_id=current_user.id,
         account_id=account_id,
         filename=file.filename,
-        file_type="pdf",
+        file_type=file_type,
         status=ImportJobStatus.PROCESSING,
         statement_period=statement_period
     )
@@ -240,14 +373,20 @@ async def upload_statement(
     created_transactions = []
 
     try:
+
         content = await file.read()
-        parsed = parse_pdf(content)
+
+        if file.filename.endswith(".pdf"):
+            parsed = parse_pdf(content)
+            source_type = TransactionSource.IMPORTED_PDF
+        else:
+            parsed = parse_csv(content)
+            source_type = TransactionSource.IMPORTED_CSV
 
         import_job.total_transactions = len(parsed)
 
         for t in parsed:
 
-            # Duplicate detection
             existing = db.query(Transaction).filter(
                 Transaction.user_id == current_user.id,
                 Transaction.date == t["date"],
@@ -268,7 +407,7 @@ async def upload_statement(
                 description=t.get("description"),
                 bank_name=bank_name,
                 card_last_four=card_last_four,
-                source=TransactionSource.IMPORTED_PDF,
+                source=source_type,
                 status=TransactionStatus.PENDING
             )
 
@@ -284,9 +423,12 @@ async def upload_statement(
             db.refresh(t)
 
     except Exception as e:
+
         import_job.status = ImportJobStatus.FAILED
         import_job.error_message = str(e)
+
         db.commit()
+
         raise HTTPException(400, f"Import failed: {str(e)}")
 
     return {
@@ -303,10 +445,10 @@ def get_import_jobs(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+
     return (
         db.query(ImportJob)
         .filter(ImportJob.user_id == current_user.id)
         .order_by(ImportJob.created_at.desc())
         .all()
     )
-
