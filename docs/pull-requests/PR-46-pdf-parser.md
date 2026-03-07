@@ -19,7 +19,7 @@ This PR significantly enhances the PDF statement import pipeline with improved p
 | Backend | 5 | — | — |
 | Frontend | 2 | — | — |
 | Test Data | 2 | — | — |
-| **Total** | **10** | **+483** | **-512** |
+| **Total** | **9** | **+483** | **-512** |
 
 ---
 
