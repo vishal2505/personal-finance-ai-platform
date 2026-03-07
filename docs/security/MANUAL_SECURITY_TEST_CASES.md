@@ -189,8 +189,8 @@
 | **Pre-conditions** | None |
 | **Steps** | 1. Open frontend → Login page<br>2. Enter `test@example.com` / `test123` → Click Login<br>3. Verify you are redirected to the 2FA page with 6 code input boxes<br>4. Enter `123456` → Click Verify<br>5. Verify you are redirected to the Dashboard |
 | **Expected Result** | Full login → 2FA → Dashboard flow completes; dashboard loads user data |
-| **Actual Result** | *(Manual browser test required — open http://localhost:3000 and walk through login → 2FA → dashboard)* |
-| **Pass / Fail** | **MANUAL** |
+| **Actual Result** | Login page displayed "Welcome Back" form; after Sign In, redirected to "Verification Required" page with 6 code input boxes; entered 123456 and clicked "Verify Access"; redirected to Dashboard showing "Welcome back, Test" with user data loaded successfully |
+| **Pass / Fail** | **PASS** |
 | **Screenshot** | |
 
 ---
@@ -546,8 +546,8 @@
 | **Pre-conditions** | Not logged in (clear localStorage) |
 | **Steps** | 1. Clear browser localStorage<br>2. Navigate directly to `http://localhost:5173/dashboard`<br>3. Try `/transactions`, `/budgets`, `/insights`, `/anomalies`, `/settings` |
 | **Expected Result** | All protected routes redirect to the Login page |
-| **Actual Result** | *(Manual browser test required — clear localStorage, navigate to /dashboard, /transactions, etc.)* |
-| **Pass / Fail** | **MANUAL** |
+| **Actual Result** | With localStorage empty (no token), navigated to localhost:3000/dashboard — immediately redirected to localhost:3000/login ("Welcome Back" page). DevTools confirms localStorage is empty. Protected route correctly blocked unauthenticated access. |
+| **Pass / Fail** | **PASS** |
 | **Screenshot** | |
 
 ### SEC-38: Token Stored in localStorage
@@ -559,8 +559,8 @@
 | **Pre-conditions** | Complete full login + 2FA flow |
 | **Steps** | 1. Complete login + 2FA via the frontend<br>2. Open DevTools → Application → Local Storage → `localhost:5173`<br>3. Look for the token key |
 | **Expected Result** | Token is stored; it is a valid JWT with `access` scope |
-| **Actual Result** | *(Manual browser test required — check DevTools → Application → Local Storage after login + 2FA)* |
-| **Pass / Fail** | **MANUAL** |
+| **Actual Result** | After login + 2FA, DevTools → Application → Local Storage shows a `token` key with a valid JWT value (eyJhbGciOiJIUzI1Ni...). Dashboard displays "Welcome back, Test" confirming authenticated session. |
+| **Pass / Fail** | **PASS** |
 | **Screenshot** | |
 
 ### SEC-39: Logout Clears Token
@@ -572,8 +572,8 @@
 | **Pre-conditions** | Logged in |
 | **Steps** | 1. Click Logout in the UI<br>2. Open DevTools → Application → Local Storage<br>3. Check that the token is removed<br>4. Try navigating to `/dashboard` |
 | **Expected Result** | Token is removed from localStorage; user is redirected to Login page |
-| **Actual Result** | *(Manual browser test required — click Logout and verify localStorage cleared)* |
-| **Pass / Fail** | **MANUAL** |
+| **Actual Result** | Clicked Logout — redirected to Landing page ("Master Your Money with AI"). DevTools → Local Storage is empty — token key removed. Session fully cleared. |
+| **Pass / Fail** | **PASS** |
 | **Screenshot** | |
 
 ---
@@ -653,7 +653,7 @@
 | SEC-09 | 2FA – Wrong Code | **PASS** |
 | SEC-10 | 2FA – Scope Enforcement (access → 2fa) | **PASS** |
 | SEC-11 | 2FA – Scope Enforcement (pending → routes) | **PASS** |
-| SEC-12 | 2FA – Frontend UI Flow | **MANUAL** |
+| SEC-12 | 2FA – Frontend UI Flow | **PASS** |
 | SEC-13 | No Token – All Endpoints | **PASS** |
 | SEC-14 | Invalid Token | **PASS** |
 | SEC-15 | Expired Token | **PASS** |
@@ -678,9 +678,9 @@
 | SEC-34 | Token Expiry – 2FA 5 min | **PASS** |
 | SEC-35 | Password Hashing | **PASS** |
 | SEC-36 | No Password in API | **PASS** |
-| SEC-37 | Frontend – Protected Routes | **MANUAL** |
-| SEC-38 | Frontend – Token Storage | **MANUAL** |
-| SEC-39 | Frontend – Logout | **MANUAL** |
+| SEC-37 | Frontend – Protected Routes | **PASS** |
+| SEC-38 | Frontend – Token Storage | **PASS** |
+| SEC-39 | Frontend – Logout | **PASS** |
 | SEC-40 | 404 – No Info Leak | **PASS** |
 | SEC-41 | 500 – No Stack Trace | **PASS** |
 | SEC-42 | No Full Card Numbers | **PASS** |
