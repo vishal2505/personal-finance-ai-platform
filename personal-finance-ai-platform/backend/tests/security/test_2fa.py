@@ -12,10 +12,31 @@ Covers:
 """
 
 import os
+import tempfile
+import atexit
 # Force SQLite BEFORE any app modules are imported so the production
 # MySQL engine is never created during test collection.
-os.environ["DATABASE_URL"] = "sqlite:///./test_2fa.db"
+_previous_database_url = os.environ.get("DATABASE_URL")
+_db_fd, _db_path = tempfile.mkstemp(prefix="test_2fa_", suffix=".db")
+os.close(_db_fd)
+os.environ["DATABASE_URL"] = f"sqlite:///{_db_path}"
 
+
+def _restore_database_url_and_cleanup():
+    """Restore previous DATABASE_URL and remove temporary SQLite file."""
+    if _previous_database_url is not None:
+        os.environ["DATABASE_URL"] = _previous_database_url
+    else:
+        os.environ.pop("DATABASE_URL", None)
+    try:
+        if os.path.exists(_db_path):
+            os.remove(_db_path)
+    except OSError:
+        # Best-effort cleanup; ignore errors (e.g., file already removed).
+        pass
+
+
+atexit.register(_restore_database_url_and_cleanup)
 import pytest
 from datetime import timedelta
 from fastapi.testclient import TestClient
