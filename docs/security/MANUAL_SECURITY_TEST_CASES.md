@@ -37,7 +37,7 @@
 | **Description** | Verify a new user can register successfully |
 | **Pre-conditions** | Email not already registered |
 | **Steps** | 1. Open frontend → Register page<br>2. Enter email: `sectest@example.com`, password: `SecurePass1!`, name: `Security Tester`<br>3. Click Register |
-| **Expected Result** | User is created; redirected to Login page; default categories and merchant rules are auto-created |
+| **Expected Result** | User is created; frontend auto-calls login and, when `status: 2fa_required` is returned, user is redirected to the 2FA verification page (`/verify-2fa`); default categories and merchant rules are auto-created |
 | **Actual Result** | |
 | **Pass / Fail** | |
 | **Screenshot** | |
