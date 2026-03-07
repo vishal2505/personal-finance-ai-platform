@@ -342,8 +342,8 @@
 | **Category** | Injection |
 | **Description** | Verify SQL injection in query parameters is safely handled |
 | **Pre-conditions** | Valid access token |
-| **Steps** | 1. GET `/api/transactions/?bank_name=' OR 1=1; DROP TABLE transactions; --` with valid token |
-| **Expected Result** | Returns empty list or HTTP 422 — no database damage; no 500 error |
+| **Steps** | 1. GET `/api/transactions/?bank_name=' OR '1'='1` (remember: URL-encode this string when sending it as a query parameter) with valid token |
+| **Expected Result** | Returns empty list or HTTP 422 — no data leak; no 500 error; database remains intact |
 | **Actual Result** | |
 | **Pass / Fail** | |
 | **Screenshot** | |
