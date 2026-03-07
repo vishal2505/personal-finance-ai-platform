@@ -107,6 +107,6 @@ These are sample OCBC bank statements used for testing the enhanced PDF parser.
 
 ---
 
-## Related Issues
+## Related PRs
 
 - PR #46: [feature/pdf-parser](https://github.com/vishal2505/personal-finance-ai-platform/pull/46)
