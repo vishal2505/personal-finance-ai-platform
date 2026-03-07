@@ -425,7 +425,7 @@
 | **Description** | Verify an empty CSV/PDF is handled gracefully |
 | **Pre-conditions** | Valid access token; create a 0-byte `.csv` file |
 | **Steps** | 1. POST `/api/imports/upload` with empty CSV file |
-| **Expected Result** | Appropriate error message (e.g., "No transactions found"); no server crash (500) |
+| **Expected Result** | HTTP 400 with an error detail like `Error parsing CSV: CSV file is empty` / `Error parsing CSV: Could not find valid CSV header` / `Error parsing CSV: No valid transactions found in CSV`; no server crash (500) |
 | **Actual Result** | |
 | **Pass / Fail** | |
 | **Screenshot** | |
