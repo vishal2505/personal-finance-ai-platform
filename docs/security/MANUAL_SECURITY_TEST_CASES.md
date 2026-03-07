@@ -412,7 +412,7 @@
 | **Description** | Verify only PDF and CSV files are accepted for statement upload |
 | **Pre-conditions** | Valid access token; have a `.exe` or `.txt` file ready |
 | **Steps** | 1. POST `/api/imports/upload` with a `.exe` file<br>2. POST `/api/imports/upload` with a `.txt` file |
-| **Expected Result** | HTTP 400 or 422 — File type not supported; file is not processed |
+| **Expected Result** | HTTP 400 with error message "File must be a CSV or PDF"; file is not processed |
 | **Actual Result** | |
 | **Pass / Fail** | |
 | **Screenshot** | |
