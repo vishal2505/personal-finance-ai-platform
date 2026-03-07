@@ -617,7 +617,7 @@
 | **Category** | Data Protection |
 | **Description** | Verify only last 4 digits of card numbers are stored |
 | **Pre-conditions** | Valid access token |
-| **Steps** | 1. POST `/api/transactions/` with `card_last_four: "1234"`<br>2. POST `/api/accounts/` with `last_four_digits: "5678"`<br>3. GET both records back and inspect |
+| **Steps** | 1. POST `/api/transactions/` with `card_last_four: "1234"`<br>2. POST `/api/accounts/` with `card_last_four: "5678"`<br>3. GET both records back and inspect |
 | **Expected Result** | Only last 4 digits stored; no field accepts or returns a full card number |
 | **Actual Result** | |
 | **Pass / Fail** | |
