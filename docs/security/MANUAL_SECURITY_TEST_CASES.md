@@ -467,11 +467,17 @@
 | **Category** | CORS |
 | **Description** | Verify requests from non-configured origins are blocked |
 | **Pre-conditions** | Backend running |
-| **Steps** | 1. Using cURL or Postman, send a request with header `Origin: http://evil-site.com`<br>   ```bash<br>   curl -i -H "Origin: http://evil-site.com" http://localhost:8000/api/health<br>   ```<br>2. Inspect the response headers |
+| **Steps** | 1. Using cURL or Postman, send a request with header `Origin: http://evil-site.com` (see command below)<br>2. Inspect the response headers |
 | **Expected Result** | Response does NOT include `Access-Control-Allow-Origin: http://evil-site.com`; browsers would block the response |
 | **Actual Result** | No `access-control-allow-origin` header in response for `http://evil-site.com` origin — browsers will block |
 | **Pass / Fail** | **PASS** |
 | **Screenshot** | |
+
+**Example cURL command for step 1:**
+
+```bash
+curl -i -H "Origin: http://evil-site.com" http://localhost:8000/api/health
+```
 
 ---
 
