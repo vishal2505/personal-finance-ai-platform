@@ -4,6 +4,7 @@ from datetime import datetime
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.main import app
 from app.database import Base, get_db
@@ -21,7 +22,11 @@ from app.routers.imports import (
 # --- Database & App Setup for Integration Tests ---
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool
+)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def override_get_db():
@@ -58,7 +63,7 @@ def test_user(test_db):
 
 @pytest.fixture
 def auth_token(test_user):
-    return create_access_token(data={"sub": test_user.email})
+    return create_access_token(data={"sub": test_user.email, "scopes": ["access"]})
 
 @pytest.fixture
 def auth_headers(auth_token):
@@ -100,9 +105,9 @@ def sample_import_job(test_user, test_db):
     )
     db.add_all([t1, t2])
     db.commit()
-    
+    db.refresh(job)
+    yield job
     db.close()
-    return job
 
 # --- Internal Function Tests ---
 # These verify the data parsing logic contained strictly within imports.py
@@ -203,7 +208,7 @@ class TestImportEndpoints:
         get_response = client.get(f"/api/imports/{sample_import_job.id}", headers=auth_headers)
         assert get_response.status_code == 404
 
-    def test_upload_csv_statement(self, auth_headers):
+    def test_upload_csv_statement(self, test_db, auth_headers):
         # Create a dummy CSV file simulating statements
         csv_content = "Date,Description,Amount\n2023-10-01,Test Coffee,5.50\n2023-10-02,Grocery,45.00"
         
