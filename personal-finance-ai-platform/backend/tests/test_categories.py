@@ -1,79 +1,9 @@
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 from app.main import app
-from app.database import Base, get_db
+from tests.conftest import TestingSessionLocal, engine, client
+from app.database import Base
 from app.models import User, Category
-from app.auth import get_password_hash, create_access_token
-
-# Test database setup
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-def override_get_db():
-    try:
-        db = TestingSessionLocal()
-        yield db
-    finally:
-        db.close()
-
-
-app.dependency_overrides[get_db] = override_get_db
-client = TestClient(app)
-
-
-@pytest.fixture(scope="function")
-def test_db():
-    Base.metadata.create_all(bind=engine)
-    yield
-    Base.metadata.drop_all(bind=engine)
-
-
-@pytest.fixture
-def test_user(test_db):
-    db = TestingSessionLocal()
-    user = User(
-        email="test@example.com",
-        hashed_password=get_password_hash("testpassword"),
-        full_name="Test User"
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    db.close()
-    return user
-
-
-@pytest.fixture
-def auth_token(test_user):
-    token = create_access_token(data={"sub": test_user.email})
-    return token
-
-
-@pytest.fixture
-def auth_headers(auth_token):
-    return {"Authorization": f"Bearer {auth_token}"}
-
-
-@pytest.fixture
-def system_category(test_db):
-    db = TestingSessionLocal()
-    category = Category(
-        name="System Groceries",
-        type="expense",
-        color="#10B981",
-        icon="🛒",
-        is_system=True,
-        user_id=None
-    )
-    db.add(category)
-    db.commit()
-    db.refresh(category)
-    db.close()
-    return category
+from app.auth import get_password_hash
 
 
 class TestCreateCategory:
