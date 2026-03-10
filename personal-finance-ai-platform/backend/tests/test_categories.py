@@ -1,9 +1,7 @@
 import pytest
-from app.main import app
 from tests.conftest import TestingSessionLocal, engine, client
 from app.database import Base
-from app.models import User, Category
-from app.auth import get_password_hash
+from app.models import Category
 
 
 class TestCreateCategory:

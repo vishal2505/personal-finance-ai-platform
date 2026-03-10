@@ -215,4 +215,4 @@ cd backend && pytest
 cd frontend && npm test
 ```
 
-No additional environment variables are required for tests: the DATABASE_URL is overridden to `sqlite:///:memory:` inside `conftest.py` before any app module is imported.
+No additional environment variables are required for tests: the DATABASE_URL is **unconditionally overridden** to `sqlite:///:memory:` inside `conftest.py` before any app module is imported, so any value already present in the shell or CI environment is safely replaced.

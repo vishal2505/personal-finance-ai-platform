@@ -1,17 +1,19 @@
 """
 Pytest configuration for the backend test suite.
 
-This module must remain import-free of any ``app.*`` modules because it runs
-before pytest imports the test files.  Setting DATABASE_URL here ensures that
-``app.database`` picks up the SQLite URI when the test modules first import it,
-so no live MySQL connection is attempted during the test run.
+DATABASE_URL is unconditionally set to ``sqlite:///:memory:`` at the very top
+of this file, before any ``app.*`` module is imported.  This guarantees that
+``app.database`` never attempts to connect to a real MySQL/Postgres instance,
+regardless of any DATABASE_URL value that may exist in the shell environment
+or CI secrets.
 """
 
 import os
 
-# Override the database URL BEFORE any app module is imported.
-# app.database builds the engine at module-level from this env var.
-os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+# Force the in-memory SQLite URL unconditionally so that any DATABASE_URL
+# already present in the environment (e.g. from CI or a local .env) is
+# overridden and the test suite never touches a real database.
+os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 import pytest
 from fastapi.testclient import TestClient  # noqa: E402 – after env var is set
