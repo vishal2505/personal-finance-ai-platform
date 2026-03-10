@@ -1,5 +1,5 @@
 /**
- * Component tests for UploadStatement drag-and-drop behaviour.
+ * Component tests for UploadStatement drag-and-drop behavior.
  *
  * Tests cover:
  *   - Dropzone renders the upload prompt initially
