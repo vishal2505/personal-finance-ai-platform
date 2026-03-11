@@ -152,6 +152,7 @@ const UploadStatement = () => {
                   Statement File
                 </label>
                 <div
+                  data-testid="statement-dropzone"
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
