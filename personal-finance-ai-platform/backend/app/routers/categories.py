@@ -163,6 +163,50 @@ def list_categories(
     return query.order_by(Category.sort_order, Category.name).all()
 
 
+@router.patch("/reorder", response_model=dict)
+def reorder_categories(
+    payload: CategoryReorder,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Bulk update sort order for multiple categories.
+
+    Only user-owned categories can be reordered.
+    """
+    category_ids = [item.id for item in payload.categories]
+
+    # Fetch all categories and verify ownership
+    categories = db.query(Category).filter(
+        and_(
+            Category.id.in_(category_ids),
+            Category.user_id == current_user.id,
+            Category.is_active == True
+        )
+    ).all()
+
+    if len(categories) != len(category_ids):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Some categories not found or not authorized"
+        )
+
+    # Create a mapping for quick lookup
+    category_map = {cat.id: cat for cat in categories}
+
+    # Update sort orders
+    for item in payload.categories:
+        if item.id in category_map:
+            category_map[item.id].sort_order = item.sort_order
+
+    db.commit()
+
+    return {
+        "message": "Categories reordered successfully",
+        "updated_count": len(categories)
+    }
+
+
 @router.get("/{category_id}", response_model=CategoryResponse)
 def get_category(
     category_id: int,
@@ -317,50 +361,6 @@ def delete_category(
     db.commit()
 
     return {"message": "Category archived successfully"}
-
-
-@router.patch("/reorder", response_model=dict)
-def reorder_categories(
-    payload: CategoryReorder,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Bulk update sort order for multiple categories.
-    
-    Only user-owned categories can be reordered.
-    """
-    category_ids = [item.id for item in payload.categories]
-    
-    # Fetch all categories and verify ownership
-    categories = db.query(Category).filter(
-        and_(
-            Category.id.in_(category_ids),
-            Category.user_id == current_user.id,
-            Category.is_active == True
-        )
-    ).all()
-    
-    if len(categories) != len(category_ids):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Some categories not found or not authorized"
-        )
-    
-    # Create a mapping for quick lookup
-    category_map = {cat.id: cat for cat in categories}
-    
-    # Update sort orders
-    for item in payload.categories:
-        if item.id in category_map:
-            category_map[item.id].sort_order = item.sort_order
-    
-    db.commit()
-    
-    return {
-        "message": "Categories reordered successfully",
-        "updated_count": len(categories)
-    }
 
 
 @router.get("/{category_id}/stats", response_model=CategoryStats)
