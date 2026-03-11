@@ -108,4 +108,3 @@ def system_category(test_db):
     db.refresh(category)
     db.close()
     return category
-

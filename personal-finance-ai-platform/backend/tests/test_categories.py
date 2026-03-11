@@ -1,6 +1,5 @@
 import pytest
-from tests.conftest import TestingSessionLocal, engine, client
-from app.database import Base
+from tests.conftest import TestingSessionLocal, client
 from app.models import Category
 
 
@@ -31,7 +30,7 @@ class TestCreateCategory:
             json={"name": "Dining", "type": "expense"},
             headers=auth_headers
         )
-        
+
         # Try to create duplicate
         response = client.post(
             "/api/categories/",
@@ -71,7 +70,7 @@ class TestCreateCategory:
             headers=auth_headers
         )
         parent_id = parent_response.json()["id"]
-        
+
         # Create child category
         response = client.post(
             "/api/categories/",
@@ -106,12 +105,12 @@ class TestListCategories:
             json={"name": "My Category", "type": "expense"},
             headers=auth_headers
         )
-        
+
         response = client.get("/api/categories/", headers=auth_headers)
         assert response.status_code == 200
         categories = response.json()
         assert len(categories) == 2
-        
+
         category_names = [cat["name"] for cat in categories]
         assert "System Groceries" in category_names
         assert "My Category" in category_names
@@ -119,7 +118,7 @@ class TestListCategories:
     def test_list_categories_filter_by_type(self, auth_headers):
         client.post("/api/categories/", json={"name": "Expense Cat", "type": "expense"}, headers=auth_headers)
         client.post("/api/categories/", json={"name": "Income Cat", "type": "income"}, headers=auth_headers)
-        
+
         response = client.get("/api/categories/?type=expense", headers=auth_headers)
         assert response.status_code == 200
         categories = response.json()
@@ -134,13 +133,13 @@ class TestListCategories:
         )
         category_id = create_response.json()["id"]
         client.delete(f"/api/categories/{category_id}", headers=auth_headers)
-        
+
         # List without inactive
         response = client.get("/api/categories/", headers=auth_headers)
         assert response.status_code == 200
         categories = response.json()
         assert all(cat["name"] != "To Delete" for cat in categories)
-        
+
         # List with inactive
         response = client.get("/api/categories/?include_inactive=true", headers=auth_headers)
         assert response.status_code == 200
@@ -155,14 +154,14 @@ class TestListCategories:
             headers=auth_headers
         )
         category_id = create_response.json()["id"]
-        
+
         # Hide it
         client.patch(
             f"/api/categories/{category_id}",
             json={"is_hidden": True},
             headers=auth_headers
         )
-        
+
         # List without hidden
         response = client.get("/api/categories/", headers=auth_headers)
         categories = response.json()
@@ -177,7 +176,7 @@ class TestGetCategory:
             headers=auth_headers
         )
         category_id = create_response.json()["id"]
-        
+
         response = client.get(f"/api/categories/{category_id}", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["name"] == "Test Category"
@@ -200,7 +199,7 @@ class TestUpdateCategory:
             headers=auth_headers
         )
         category_id = create_response.json()["id"]
-        
+
         response = client.patch(
             f"/api/categories/{category_id}",
             json={"name": "Updated Name", "color": "#FF0000"},
@@ -224,7 +223,7 @@ class TestUpdateCategory:
         client.post("/api/categories/", json={"name": "Category A", "type": "expense"}, headers=auth_headers)
         create_response = client.post("/api/categories/", json={"name": "Category B", "type": "expense"}, headers=auth_headers)
         category_id = create_response.json()["id"]
-        
+
         response = client.patch(
             f"/api/categories/{category_id}",
             json={"name": "Category A"},
@@ -240,7 +239,7 @@ class TestUpdateCategory:
             headers=auth_headers
         )
         category_id = create_response.json()["id"]
-        
+
         response = client.patch(
             f"/api/categories/{category_id}",
             json={"parent_id": category_id},
@@ -256,13 +255,13 @@ class TestUpdateCategory:
             json={"name": "Category A", "type": "expense"},
             headers=auth_headers
         ).json()
-        
+
         cat_b = client.post(
             "/api/categories/",
             json={"name": "Category B", "type": "expense", "parent_id": cat_a["id"]},
             headers=auth_headers
         ).json()
-        
+
         # Try to set A's parent to B (would create A → B → A)
         response = client.patch(
             f"/api/categories/{cat_a['id']}",
@@ -280,19 +279,19 @@ class TestUpdateCategory:
             json={"name": "Category A", "type": "expense"},
             headers=auth_headers
         ).json()
-        
+
         cat_b = client.post(
             "/api/categories/",
             json={"name": "Category B", "type": "expense", "parent_id": cat_a["id"]},
             headers=auth_headers
         ).json()
-        
+
         cat_c = client.post(
             "/api/categories/",
             json={"name": "Category C", "type": "expense", "parent_id": cat_b["id"]},
             headers=auth_headers
         ).json()
-        
+
         # Try to set A's parent to C (would create A → B → C → A)
         response = client.patch(
             f"/api/categories/{cat_a['id']}",
@@ -309,25 +308,25 @@ class TestUpdateCategory:
             json={"name": "Category A", "type": "expense"},
             headers=auth_headers
         ).json()
-        
+
         cat_b = client.post(
             "/api/categories/",
             json={"name": "Category B", "type": "expense", "parent_id": cat_a["id"]},
             headers=auth_headers
         ).json()
-        
+
         client.post(
             "/api/categories/",
             json={"name": "Category C", "type": "expense", "parent_id": cat_b["id"]},
             headers=auth_headers
         ).json()
-        
+
         cat_d = client.post(
             "/api/categories/",
             json={"name": "Category D", "type": "expense"},
             headers=auth_headers
         ).json()
-        
+
         # Set D's parent to B (D → B, which is valid)
         response = client.patch(
             f"/api/categories/{cat_d['id']}",
@@ -346,11 +345,11 @@ class TestDeleteCategory:
             headers=auth_headers
         )
         category_id = create_response.json()["id"]
-        
+
         response = client.delete(f"/api/categories/{category_id}", headers=auth_headers)
         assert response.status_code == 200
         assert "archived" in response.json()["message"]
-        
+
         # Verify it's soft deleted
         get_response = client.get(f"/api/categories/{category_id}", headers=auth_headers)
         assert get_response.status_code == 404
@@ -367,7 +366,7 @@ class TestBulkReorder:
         cat1 = client.post("/api/categories/", json={"name": "Cat 1", "type": "expense"}, headers=auth_headers).json()
         cat2 = client.post("/api/categories/", json={"name": "Cat 2", "type": "expense"}, headers=auth_headers).json()
         cat3 = client.post("/api/categories/", json={"name": "Cat 3", "type": "expense"}, headers=auth_headers).json()
-        
+
         response = client.patch(
             "/api/categories/reorder",
             json={
@@ -381,7 +380,7 @@ class TestBulkReorder:
         )
         assert response.status_code == 200
         assert response.json()["updated_count"] == 3
-        
+
         # Verify order
         list_response = client.get("/api/categories/", headers=auth_headers)
         categories = list_response.json()
@@ -397,7 +396,7 @@ class TestCategoryStats:
             headers=auth_headers
         )
         category_id = create_response.json()["id"]
-        
+
         response = client.get(f"/api/categories/{category_id}/stats", headers=auth_headers)
         assert response.status_code == 200
         stats = response.json()
