@@ -12,7 +12,12 @@
       "Bash(netstat:*)",
       "Bash(tasklist:*)",
       "Bash(net stop:*)",
-      "Bash(DB_PORT_MAPPING=\"3307:3306\" docker compose up:*)"
+      "Bash(DB_PORT_MAPPING=\"3307:3306\" docker compose up:*)",
+      "Bash(pip install:*)",
+      "Bash(npm install:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(pip show:*)",
+      "Bash(npx vitest:*)"
     ]
   }
 }
