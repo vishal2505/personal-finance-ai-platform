@@ -2,48 +2,10 @@ import pytest
 import json
 from unittest.mock import patch, MagicMock
 from datetime import datetime, timedelta
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-from app.main import app
-from app.database import Base, get_db
 from app.models import User, Category, Transaction
 from app.auth import get_password_hash, create_access_token
 from app.routers.insights import generate_ai_insight, generate_openai_insights
-
-# ---------------------------------------------------------------------------
-# Test database setup (mirrors test_categories.py)
-# ---------------------------------------------------------------------------
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-def override_get_db():
-    try:
-        db = TestingSessionLocal()
-        yield db
-    finally:
-        db.close()
-
-
-app.dependency_overrides[get_db] = override_get_db
-client = TestClient(app)
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-@pytest.fixture(scope="function")
-def test_db():
-    Base.metadata.create_all(bind=engine)
-    yield
-    Base.metadata.drop_all(bind=engine)
+from tests.conftest import client, TestingSessionLocal
 
 
 @pytest.fixture

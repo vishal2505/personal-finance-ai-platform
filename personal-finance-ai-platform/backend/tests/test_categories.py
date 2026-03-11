@@ -1,7 +1,51 @@
 import pytest
-from tests.conftest import TestingSessionLocal, engine, client
-from app.database import Base
-from app.models import Category
+from app.models import User, Category
+from app.auth import get_password_hash, create_access_token
+from tests.conftest import client, TestingSessionLocal
+
+
+@pytest.fixture
+def test_user(test_db):
+    db = TestingSessionLocal()
+    user = User(
+        email="test@example.com",
+        hashed_password=get_password_hash("testpassword"),
+        full_name="Test User"
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    db.close()
+    return user
+
+
+@pytest.fixture
+def auth_token(test_user):
+    token = create_access_token(data={"sub": test_user.email, "scopes": ["access"]})
+    return token
+
+
+@pytest.fixture
+def auth_headers(auth_token):
+    return {"Authorization": f"Bearer {auth_token}"}
+
+
+@pytest.fixture
+def system_category(test_db):
+    db = TestingSessionLocal()
+    category = Category(
+        name="System Groceries",
+        type="expense",
+        color="#10B981",
+        icon="🛒",
+        is_system=True,
+        user_id=None
+    )
+    db.add(category)
+    db.commit()
+    db.refresh(category)
+    db.close()
+    return category
 
 
 class TestCreateCategory:

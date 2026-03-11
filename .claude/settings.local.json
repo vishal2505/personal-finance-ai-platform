@@ -17,7 +17,8 @@
       "Bash(npm install:*)",
       "Bash(python -m pytest:*)",
       "Bash(pip show:*)",
-      "Bash(npx vitest:*)"
+      "Bash(npx vitest:*)",
+      "Bash(docker compose run:*)"
     ]
   }
 }
