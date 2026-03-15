@@ -21,7 +21,7 @@ statements are imported through secure manual upload workflows (PDF/CSV upload).
 
 - **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS
 - **Backend**: FastAPI (Python) + SQLAlchemy
-- **Database**: PostgreSQL
+- **Database**: PostgreSQL (local setup) / MySQL (Docker Compose)
 - **AI Services**: LLM-based insight generation, Isolation Forest for anomaly detection
 - **File Processing**: pdfplumber (PDF), pandas (CSV)
 
@@ -51,10 +51,29 @@ statements are imported through secure manual upload workflows (PDF/CSV upload).
 
 ## Setup Instructions
 
+All commands below are run from the `personal-finance-ai-platform` directory (where `docker-compose.yml` and `backend/` live).
+
 ### Prerequisites
 - Python 3.9+
 - Node.js 18+
 - PostgreSQL 12+
+
+Alternatively, use **Docker & Docker Compose** to run the full stack without installing a local database.
+
+### Run with Docker (recommended)
+
+From the repository root, go to the app directory and start all services:
+
+```bash
+cd personal-finance-ai-platform
+docker compose up --build
+```
+
+- **Frontend:** http://localhost:5173
+- **Backend API:** http://localhost:8000
+- **API docs:** http://localhost:8000/docs
+
+Requires Docker Desktop. Stop with `Ctrl+C`; run `docker compose down` to remove containers.
 
 ### Backend Setup
 
@@ -110,7 +129,7 @@ npm install
 npm run dev
 ```
 
-The application will be available at `http://localhost:3000`
+The application will be available at the URL shown in the terminal (typically http://localhost:5173).
 
 ## API Documentation
 
@@ -122,6 +141,8 @@ Once the backend is running, visit:
 
 ```
 personal-finance-ai-platform/
+├── docker-compose.yml
+├── docs/
 ├── backend/
 │   ├── app/
 │   │   ├── routers/        # API route handlers
@@ -155,3 +176,5 @@ personal-finance-ai-platform/
 8. **Manage Settings**: Configure categories and merchant rules
 
 ## Team
+
+Course project team — see repository contributors.
