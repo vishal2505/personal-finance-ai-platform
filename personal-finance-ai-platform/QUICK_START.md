@@ -1,11 +1,34 @@
 # Quick Start Guide
 
+## Option A: Run with Docker (easiest)
+
+Run the full stack (database, backend, frontend) with one command. No need to install PostgreSQL or Node locally.
+
+From the repository root, go to the app directory and start:
+
+```bash
+cd personal-finance-ai-platform
+docker compose up --build
+```
+
+Then open:
+
+- **Frontend App**: http://localhost:5173
+- **Backend API**: http://localhost:8000
+- **API Documentation**: http://localhost:8000/docs
+
+Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/). Stop with `Ctrl+C`; run `docker compose down` to remove containers.
+
+---
+
+## Option B: Run backend and frontend manually
+
 ## ✅ Backend and Frontend Started!
 
 Both servers should now be running:
 
 - **Backend API**: http://localhost:8000
-- **Frontend App**: http://localhost:3000
+- **Frontend App**: http://localhost:5173 (Vite default; check terminal if different)
 - **API Documentation**: http://localhost:8000/docs
 
 ## Important: Database Setup Required
@@ -39,7 +62,7 @@ docker run --name postgres-finance -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=
 
 ## Next Steps
 
-1. **Open your browser** and go to: http://localhost:3000
+1. **Open your browser** and go to: http://localhost:5173
 2. **Register** a new account
 3. **Start using** the application!
 
@@ -52,7 +75,7 @@ docker run --name postgres-finance -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=
 - Look at the terminal output for error messages
 
 ### Frontend not starting?
-- Check if port 3000 is already in use
+- Check if port 5173 is already in use (Vite default)
 - Make sure `node_modules` is installed (run `npm install` in frontend folder)
 - Check the terminal output for error messages
 
@@ -63,7 +86,7 @@ docker run --name postgres-finance -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=
 
 ## Manual Start Commands
 
-If you need to restart the servers manually:
+If you need to restart the servers manually, run these from the `personal-finance-ai-platform` directory:
 
 ### Backend (in one terminal):
 ```powershell
