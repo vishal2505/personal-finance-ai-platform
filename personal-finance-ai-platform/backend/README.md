@@ -29,7 +29,6 @@ OPENAI_API_KEY=your-openai-api-key-here
 ```
 
 4. Set up MySQL database:
-4. Set up MySQL database:
 ```bash
 # Example using mysql client
 mysql -u root -p -e "CREATE DATABASE spendwise_db;"

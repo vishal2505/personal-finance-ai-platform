@@ -1,6 +1,23 @@
 # Setup Guide
 
-## Quick Start
+## Run with Docker (optional)
+
+To run the full stack (database, backend, frontend) without installing PostgreSQL or Node locally:
+
+```bash
+cd personal-finance-ai-platform
+docker compose up --build
+```
+
+- **Frontend:** http://localhost:5173  
+- **Backend:** http://localhost:8000  
+- **API docs:** http://localhost:8000/docs  
+
+Requires Docker Desktop. Stop with `Ctrl+C`; run `docker compose down` to remove containers.
+
+---
+
+## Quick Start (manual setup)
 
 ### 1. Database Setup
 
