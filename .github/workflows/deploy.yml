@@ -137,6 +137,7 @@ jobs:
           echo "S3_BUCKET=$FRONTEND_BUCKET" >> $GITHUB_ENV
           echo "FRONTEND_DISTRIBUTION_ID=$FRONTEND_DISTRIBUTION_ID" >> $GITHUB_ENV
           echo "FRONTEND_API_BASE_URL=$BACKEND_URL" >> $GITHUB_ENV
+          echo "Backend CloudFront URL: $BACKEND_URL"
 
       - name: Terraform destroy
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy' }}
@@ -156,6 +157,11 @@ jobs:
         working-directory: personal-finance-ai-platform/frontend
         run: |
           npm ci
+          if [ -z "$FRONTEND_API_BASE_URL" ] || [ "${FRONTEND_API_BASE_URL#https://}" = "$FRONTEND_API_BASE_URL" ]; then
+            echo "ERROR: FRONTEND_API_BASE_URL must be set to an https URL"
+            echo "Current value: '$FRONTEND_API_BASE_URL'"
+            exit 1
+          fi
           VITE_API_BASE_URL="$FRONTEND_API_BASE_URL" npm run build:ci
 
       - name: Sync frontend to S3
