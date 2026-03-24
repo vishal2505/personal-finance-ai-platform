@@ -19,16 +19,29 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 class Token(BaseModel):
-    access_token: str
-    token_type: str
-    status: Optional[str] = "success"  # "success" or "2fa_required"
+    access_token: str = Field(
+        ...,
+        description=(
+            "JWT token. After /api/auth/login this is a temporary token with "
+            "'2fa_pending' scope. After /api/auth/verify-2fa this is the final "
+            "token with 'access' scope for protected APIs."
+        ),
+    )
+    token_type: str = Field(..., description="Bearer")
+    status: Optional[str] = Field(
+        default="success",
+        description="Authentication status: '2fa_required' after login, 'success' after 2FA verification.",
+    )
 
 class TokenData(BaseModel):
     email: Optional[str] = None
     scopes: List[str] = []
 
 class TwoFactorVerify(BaseModel):
-    code: str
+    code: str = Field(
+        ...,
+        description="6-digit 2FA code. Use the temporary token returned by /api/auth/login in the Authorize dialog before calling this endpoint.",
+    )
 
 # Transaction schemas
 class TransactionCreate(BaseModel):

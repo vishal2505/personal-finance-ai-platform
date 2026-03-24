@@ -84,7 +84,18 @@ except Exception:
     logger.exception("Auto-migration failed – the app will start anyway")
 
 
-app = FastAPI(title="Personal Finance AI Platform", version="1.0.0")
+app = FastAPI(
+    title="Personal Finance AI Platform",
+    version="1.0.0",
+    description=(
+        "API for the Personal Finance AI Platform.\n\n"
+        "Authentication uses a 2-step flow:\n"
+        "1. Call /api/auth/login to receive a temporary token with '2fa_pending' scope.\n"
+        "2. Authorize Swagger with that token and call /api/auth/verify-2fa.\n"
+        "3. Copy the new token returned by /api/auth/verify-2fa and authorize Swagger again.\n"
+        "4. Use that final token for protected endpoints such as /api/categories/."
+    ),
+)
 
 # --- Seed test user if not present ---
 from app.auth import get_password_hash, get_user_by_email
