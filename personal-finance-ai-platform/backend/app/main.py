@@ -77,6 +77,42 @@ def ensure_schema_up_to_date():
                 logger.info("Auto-migration: %s", stmt)
                 conn.execute(text(stmt))
 
+    # --- import_jobs ---------------------------------------------------------
+    if "import_jobs" in existing_tables:
+        cols = {c["name"] for c in inspector.get_columns("import_jobs")}
+
+        alters: list[str] = []
+        if "account_id" not in cols:
+            alters.append(
+                "ALTER TABLE import_jobs ADD COLUMN account_id INTEGER NULL"
+            )
+        if "statement_period" not in cols:
+            alters.append(
+                "ALTER TABLE import_jobs ADD COLUMN statement_period VARCHAR(100) NULL"
+            )
+        if "processed_transactions" not in cols:
+            alters.append(
+                "ALTER TABLE import_jobs ADD COLUMN processed_transactions INTEGER DEFAULT 0"
+            )
+        if "total_amount" not in cols:
+            alters.append(
+                "ALTER TABLE import_jobs ADD COLUMN total_amount FLOAT DEFAULT 0"
+            )
+        if "error_message" not in cols:
+            alters.append(
+                "ALTER TABLE import_jobs ADD COLUMN error_message TEXT NULL"
+            )
+        if "completed_at" not in cols:
+            alters.append(
+                "ALTER TABLE import_jobs ADD COLUMN completed_at DATETIME NULL"
+            )
+
+        if alters:
+            with engine.begin() as conn:
+                for stmt in alters:
+                    logger.info("Auto-migration: %s", stmt)
+                    conn.execute(text(stmt))
+
 
 try:
     ensure_schema_up_to_date()

@@ -20,7 +20,7 @@ router = APIRouter()
 # =========================
 # DATE PARSER
 # =========================
-def _parse_date(date_str: str):
+def _parse_date(date_str: str, reference_year: Optional[int] = None):
     if not date_str:
         return None
 
@@ -37,6 +37,13 @@ def _parse_date(date_str: str):
             return datetime.strptime(cleaned, f)
         except:
             continue
+
+    if reference_year:
+        for f in ("%d%b", "%d %b", "%d/%m", "%d-%m", "%d.%m"):
+            try:
+                return datetime.strptime(f"{cleaned}{reference_year}", f"{f}%Y")
+            except:
+                continue
 
     return None
 
@@ -105,8 +112,10 @@ def _is_valid_transaction(date, merchant, amount):
 def _parse_text(text: str):
 
     transactions = []
+    years = [int(y) for y in re.findall(r"\b(20\d{2})\b", text)]
+    reference_year = max(years) if years else None
 
-    date_pattern = r'(\d{1,2}[/\s.-](?:\d{1,2}|[A-Za-z]{3,9})[/\s.-]\d{2,4})'
+    date_pattern = r'(\d{1,2}(?:[/\s.-](?:\d{1,2}|[A-Za-z]{3,9})[/\s.-]\d{2,4}|[A-Za-z]{3,9}))'
     amount_pattern = r'(\(?-?[\d,]+\.\d{2}\)?)'
     pattern = date_pattern + r"\s+(.+?)\s+" + amount_pattern
 
@@ -117,7 +126,7 @@ def _parse_text(text: str):
         if "FOREIGN AMOUNT" in merchant.upper():
             continue
 
-        date = _parse_date(date_str)
+        date = _parse_date(date_str, reference_year=reference_year)
         amount = _parse_amount(amt)
 
         merchant = merchant.strip()
@@ -133,12 +142,12 @@ def _parse_text(text: str):
     if not transactions:
 
         amounts = re.findall(r"\d{1,3}(?:,\d{3})*\.\d{2}", text)
-        txns = re.findall(r"(\d{2}\.\d{2}\.\d{2})\s+([A-Z0-9\*\'\-\s]+)", text)
+        txns = re.findall(r"(\d{2}(?:\.\d{2}\.\d{2}|[A-Z]{3}))\s+([A-Z0-9\*\'\-\s]+)", text)
 
         for i in range(min(len(amounts), len(txns))):
             d, m = txns[i]
 
-            date = _parse_date(d)
+            date = _parse_date(d, reference_year=reference_year)
             amount = _parse_amount(amounts[i])
 
             if _is_valid_transaction(date, m, amount):
