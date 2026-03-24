@@ -3,7 +3,7 @@ from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
@@ -18,7 +18,15 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
 
 # Use a pure-Python password hash to avoid platform-specific bcrypt issues in local dev.
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+
+# For Swagger step 1: lets users enter username/password and obtain the temporary
+# 2fa_pending token from /api/auth/login.
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
+# For Swagger step 2 and all protected APIs: lets users paste the final bearer
+# token returned by /api/auth/verify-2fa.
 bearer_scheme = HTTPBearer(
+    auto_error=False,
     bearerFormat="JWT",
     description=(
         "Paste the final bearer token returned by /api/auth/verify-2fa. "
@@ -64,18 +72,21 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
     return user
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
     """
     Validates the token and requires the 'access' scope (fully authenticated).
     """
-    token = credentials.credentials
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    if credentials is None:
+        raise credentials_exception
+
+    token = credentials.credentials
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
@@ -100,14 +111,13 @@ async def get_current_user(
     return user
 
 async def get_pending_2fa_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> User:
     """
     Validates the token and requires '2fa_pending' scope. 
     Used ONLY for the /verify-2fa endpoint.
     """
-    token = credentials.credentials
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
