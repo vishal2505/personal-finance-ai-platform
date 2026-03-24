@@ -132,8 +132,10 @@ jobs:
         working-directory: infra/staging
         run: |
           FRONTEND_BUCKET=$(terraform output -raw frontend_bucket_name)
+          FRONTEND_DISTRIBUTION_ID=$(terraform output -raw frontend_cloudfront_distribution_id)
           BACKEND_URL=$(terraform output -raw backend_cloudfront_url)
           echo "S3_BUCKET=$FRONTEND_BUCKET" >> $GITHUB_ENV
+          echo "FRONTEND_DISTRIBUTION_ID=$FRONTEND_DISTRIBUTION_ID" >> $GITHUB_ENV
           echo "FRONTEND_API_BASE_URL=$BACKEND_URL" >> $GITHUB_ENV
 
       - name: Terraform destroy
@@ -159,3 +161,7 @@ jobs:
       - name: Sync frontend to S3
         if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.action == 'apply' }}
         run: aws s3 sync personal-finance-ai-platform/frontend/dist "s3://$S3_BUCKET" --delete
+
+      - name: Invalidate frontend CloudFront cache
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.action == 'apply' }}
+        run: aws cloudfront create-invalidation --distribution-id "$FRONTEND_DISTRIBUTION_ID" --paths "/*"

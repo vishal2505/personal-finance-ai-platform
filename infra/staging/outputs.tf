@@ -18,6 +18,10 @@ output "frontend_cloudfront_url" {
   value = "https://${aws_cloudfront_distribution.frontend.domain_name}"
 }
 
+output "frontend_cloudfront_distribution_id" {
+  value = aws_cloudfront_distribution.frontend.id
+}
+
 output "backend_cloudfront_url" {
   value = "https://${aws_cloudfront_distribution.backend.domain_name}"
 }
