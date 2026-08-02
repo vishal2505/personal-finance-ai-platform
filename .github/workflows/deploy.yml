@@ -32,6 +32,7 @@ jobs:
     steps:
       - name: Skip backend tests for destroy
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy' }}
+        working-directory: .
         run: echo "Skipping backend tests because this run is destroying infrastructure"
 
       - name: Checkout
