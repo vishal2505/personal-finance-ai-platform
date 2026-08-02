@@ -39,7 +39,7 @@ const Settings = () => {
   const fetchData = async () => {
     try {
       const [categoriesRes, rulesRes] = await Promise.all([
-        axios.get('/api/categories'),
+        axios.get('/api/categories/'),
         axios.get('/api/settings/merchant-rules')
       ])
       setCategories(categoriesRes.data)

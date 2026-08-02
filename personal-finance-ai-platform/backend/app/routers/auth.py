@@ -17,7 +17,15 @@ from app.auth import (
 
 router = APIRouter()
 
-@router.post("/register", response_model=UserResponse)
+@router.post(
+    "/register",
+    response_model=UserResponse,
+    summary="Register a new user",
+    description=(
+        "Creates a new user account, seeds default categories, and seeds default "
+        "merchant automation rules for that user."
+    ),
+)
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
     # Check if user already exists
     db_user = get_user_by_email(db, email=user_data.email)
@@ -109,7 +117,22 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     
     return db_user
 
-@router.post("/login", response_model=Token)
+@router.post(
+    "/login",
+    response_model=Token,
+    summary="Step 1: Login and get temporary 2FA token",
+    description=(
+        "Authenticates the user's email and password and returns a temporary bearer "
+        "token with '2fa_pending' scope. This token only works for /api/auth/verify-2fa "
+        "and will be rejected by protected APIs such as /api/categories/.\n\n"
+        "Swagger usage:\n"
+        "1. Call this endpoint.\n"
+        "2. Copy the returned access_token.\n"
+        "3. Click Authorize and paste that token.\n"
+        "4. Call /api/auth/verify-2fa.\n"
+        "5. Replace the token in Authorize with the new token returned by /api/auth/verify-2fa."
+    ),
+)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
@@ -132,7 +155,22 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         "status": "2fa_required"
     }
 
-@router.post("/verify-2fa", response_model=Token)
+@router.post(
+    "/verify-2fa",
+    response_model=Token,
+    summary="Step 2: Verify 2FA and get final access token",
+    description=(
+        "Verifies the 2FA code using the temporary token returned by /api/auth/login. "
+        "On success, returns a new bearer token with 'access' scope. Use this final token "
+        "for all protected APIs.\n\n"
+        "Swagger usage:\n"
+        "1. Authorize Swagger with the temporary token from /api/auth/login.\n"
+        "2. Call this endpoint with the 2FA code.\n"
+        "3. Copy the new access_token from the response.\n"
+        "4. Click Authorize again and replace the old token with the new one.\n"
+        "5. Retry protected endpoints such as /api/categories/."
+    ),
+)
 def verify_two_factor(
     payload: TwoFactorVerify,
     user: User = Depends(get_pending_2fa_user)
@@ -160,6 +198,11 @@ def verify_two_factor(
         "status": "success"
     }
 
-@router.get("/me", response_model=UserResponse)
+@router.get(
+    "/me",
+    response_model=UserResponse,
+    summary="Get current authenticated user",
+    description="Requires the final bearer token returned by /api/auth/verify-2fa.",
+)
 def get_current_user_info(current_user: User = Depends(get_current_user)):
     return current_user
